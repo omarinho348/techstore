@@ -23,6 +23,8 @@ from typing import Any
 import resend
 from dotenv import load_dotenv
 
+from rag import retrieve_relevant_chunks
+
 # Load environment variables from .env (OPENAI_API_KEY, RESEND_API_KEY, etc.)
 load_dotenv()
 
@@ -444,3 +446,65 @@ def send_support_email(customer_email: str, issue: str) -> dict[str, Any]:
             "success": False,
             "error": f"Failed to send escalation email: {error}",
         }
+
+
+# =====================================================================
+# TOOL 7: SEARCH KNOWLEDGE BASE (RAG)
+# =====================================================================
+def search_knowledge_base(query: str) -> dict[str, Any]:
+    """
+    Search TechStore's knowledge base (return policy, warranty, shipping,
+    store information, and FAQ documents) for information relevant to a
+    customer's question.
+
+    This is a RAG (Retrieval-Augmented Generation) tool: it embeds the
+    query and retrieves the most semantically similar chunk(s) from a
+    Chroma vector store built from knowledge_base/*.txt. Unlike the
+    other tools, it doesn't look up a specific record by ID -- it
+    answers open-ended policy/FAQ questions that live in documents, not
+    in structured order/product/ticket data.
+
+    Args:
+        query: The customer's question, in natural language (e.g.,
+            "What's your return policy?", "Is water damage covered
+            under warranty?").
+
+    Returns:
+        On success (at least one relevant chunk found):
+            {
+                "found": True,
+                "query": "What's your return policy?",
+                "results": [
+                    {"text": "...", "source": "return_policy.txt"},
+                    ...
+                ]
+            }
+        On failure (nothing relevant enough in the knowledge base):
+            {
+                "found": False,
+                "query": "...",
+                "results": [],
+                "error": "No relevant information found for '...'."
+            }
+    """
+    relevant_chunks = retrieve_relevant_chunks(query)
+
+    if not relevant_chunks:
+        logger.info("search_knowledge_base: no relevant chunks for query %r", query)
+        return {
+            "found": False,
+            "query": query,
+            "results": [],
+            "error": f"No relevant information found for '{query}'.",
+        }
+
+    logger.info(
+        "search_knowledge_base: %d relevant chunk(s) found for query %r",
+        len(relevant_chunks),
+        query,
+    )
+    return {
+        "found": True,
+        "query": query,
+        "results": relevant_chunks,
+    }

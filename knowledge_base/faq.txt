@@ -1,0 +1,7 @@
+Frequently Asked Questions
+Q: Can I change my shipping address?
+A: Yes, before the order is shipped.
+Q: Can I cancel an order?
+A: Only while its status is Processing.
+Q: How can I track my order?
+A: Use the tracking link sent by email after shipment.

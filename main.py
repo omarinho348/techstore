@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import time
+from datetime import date
 
 import gradio as gr
 from dotenv import load_dotenv
@@ -31,6 +32,7 @@ from tools import (
     check_order_status,
     check_refund_eligibility,
     search_products,
+    search_knowledge_base,
     send_support_email,
     ticket_inquiry,
 )
@@ -87,17 +89,20 @@ client = create_openai_client()
 # =====================================================================
 # This is the behavioral contract for the assistant. It is sent as the
 # first message in every conversation and governs how the model uses
-# the six tools defined in schemas.py / tools.py.
+# the seven tools defined in schemas.py / tools.py.
 SYSTEM_PROMPT = """You are the TechStore AI Customer Support Assistant, \
 a helpful and professional support agent for TechStore, an online \
 electronics retailer.
 
-You have access to six tools that connect to TechStore's real order, \
-product, and ticket data. Follow these rules strictly:
+You have access to seven tools. Six connect to TechStore's real order, \
+product, and ticket data. The seventh, search_knowledge_base, searches \
+company policy and FAQ documents (return policy, warranty, shipping, \
+store hours/locations, and general FAQs). Follow these rules strictly:
 
 1. ALWAYS use a tool for factual lookups. Never guess or make up an \
-order status, product price, stock level, refund eligibility, or \
-ticket status. If a tool exists that can answer the question, call it.
+order status, product price, stock level, refund eligibility, ticket \
+status, or policy detail. If a tool exists that can answer the \
+question, call it.
 
 2. NEVER invent information that was not returned by a tool. If a tool \
 result does not include a piece of information (e.g., no tracking \
@@ -108,22 +113,55 @@ tell the customer honestly what went wrong (e.g., "I couldn't find an \
 order with that ID") using the tool's error message. Do not retry the \
 same tool with a guessed or modified value.
 
-4. Only call send_support_email when NONE of the other five tools \
+4. Only call send_support_email when NONE of the other six tools \
 (check_order_status, search_products, cancel_order, \
-check_refund_eligibility, ticket_inquiry) can resolve the customer's \
-issue. This is a last resort for problems like duplicate charges, \
-complaints, or situations requiring human judgment -- not a first \
-response. Before escalating, make sure you've already attempted an \
-appropriate tool lookup if one applies to the situation.
+check_refund_eligibility, ticket_inquiry, search_knowledge_base) can \
+resolve the customer's issue. This is a last resort for problems like \
+duplicate charges, complaints, or situations requiring human judgment \
+-- not a first response. Before escalating, make sure you've already \
+attempted an appropriate tool lookup if one applies to the situation.
 
-5. If the customer's request is missing information a tool requires \
+5. Use search_knowledge_base for open-ended questions about company \
+policy or general information (return policy, warranty, shipping, \
+store hours/locations, FAQs) that are NOT tied to a specific order, \
+product, or ticket ID. Use the specific backend tool instead when the \
+question references a specific ID or record (e.g., "is order 1003 \
+eligible for a refund?" needs check_refund_eligibility, not the \
+knowledge base). A single question may need both a knowledge-base \
+search and a backend lookup -- call both tools in that case.
+
+6. If the customer's request is missing information a tool requires \
 (such as an order ID or ticket ID), ask them for it directly instead \
 of guessing or calling the tool with an empty value.
 
-6. Be concise, polite, and professional -- like a real TechStore \
+7. Be concise, polite, and professional -- like a real TechStore \
 support agent. Summarize tool results in natural language; do not \
 dump raw JSON or field names at the customer.
+
+8. When reasoning about deadlines, elapsed time, or "days ago" \
+calculations (e.g., return windows, refund processing time), always \
+calculate using the actual current date provided to you below -- never \
+assume, guess, or accept a customer's stated day-count without \
+verifying it yourself against that date.
 """
+
+
+def build_system_prompt() -> str:
+    """
+    Build the full system prompt, with today's real date appended fresh.
+
+    The static SYSTEM_PROMPT text above is defined once at import time,
+    but the current date obviously changes -- so rather than bake a
+    stale date into it permanently (this app could run for days), we
+    compute "today" fresh on every call and append it. This grounds the
+    model's date arithmetic (e.g., "was this within the 30-day return
+    window?") against a real anchor point instead of letting it guess.
+
+    Returns:
+        The complete system prompt text for this turn.
+    """
+    today_str = date.today().strftime("%A, %B %d, %Y")
+    return SYSTEM_PROMPT + f"\nToday's date is {today_str}."
 
 
 # =====================================================================
@@ -140,6 +178,7 @@ TOOL_DISPATCH: dict[str, callable] = {
     "check_refund_eligibility": check_refund_eligibility,
     "ticket_inquiry": ticket_inquiry,
     "send_support_email": send_support_email,
+    "search_knowledge_base": search_knowledge_base,
 }
 
 
@@ -428,7 +467,7 @@ def chat_function(message: str, history: list[dict]):
     Yields:
         Progressively longer prefixes of the assistant's reply text.
     """
-    conversation_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    conversation_messages = [{"role": "system", "content": build_system_prompt()}]
     conversation_messages.extend(history)
     conversation_messages.append({"role": "user", "content": message})
 
@@ -471,7 +510,7 @@ def build_interface() -> gr.ChatInterface:
         fn=chat_function,
         chatbot=styled_chatbot,
         fill_height=True,
-        title="TechStore AI Customer Support Assistant",
+        title="🛍️ TechStore AI Customer Support Assistant",
         description=(
             "Ask about order status, product availability, cancellations, "
             "refund eligibility, or support tickets. If I can't resolve "
@@ -480,7 +519,7 @@ def build_interface() -> gr.ChatInterface:
         examples=[
             "What's the status of order 1001?",
             "Do you have any laptops in stock?",
-            "Can I cancel order 1003?",
+            "What is your return policy?",
             "Am I eligible for a refund on order 1003?",
         ],
     )

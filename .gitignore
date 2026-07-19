@@ -6,6 +6,9 @@ dist/
 wheels/
 *.egg-info
 
+# Chroma vector store (regenerated from knowledge_base/ on first run)
+chroma_store/
+
 # Virtual environments
 .venv/
 

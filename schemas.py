@@ -194,6 +194,44 @@ SEND_SUPPORT_EMAIL_SCHEMA: dict[str, Any] = {
 
 
 # =====================================================================
+# TOOL SCHEMA: search_knowledge_base
+# =====================================================================
+SEARCH_KNOWLEDGE_BASE_SCHEMA: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "search_knowledge_base",
+        "description": (
+            "Search TechStore's knowledge base for policy and FAQ "
+            "information -- return policy, warranty policy, shipping, "
+            "store hours/locations, and general FAQs. Use this for "
+            "open-ended questions about company policies or general "
+            "information that is NOT tied to a specific order, product, "
+            "or ticket ID. For example: 'what's your return policy?', "
+            "'is water damage covered under warranty?', 'what are your "
+            "store hours?'. Do not use this tool for looking up a "
+            "specific order, product, or ticket -- use the dedicated "
+            "tool for that instead."
+        ),
+        "strict": True,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": (
+                        "The customer's question, in natural language, "
+                        "e.g. 'What is your return policy?'."
+                    ),
+                }
+            },
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+
+# =====================================================================
 # ALL SCHEMAS, COLLECTED
 # =====================================================================
 # main.py imports this single list and passes it directly into the
@@ -205,4 +243,5 @@ ALL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     CHECK_REFUND_ELIGIBILITY_SCHEMA,
     TICKET_INQUIRY_SCHEMA,
     SEND_SUPPORT_EMAIL_SCHEMA,
+    SEARCH_KNOWLEDGE_BASE_SCHEMA,
 ]
