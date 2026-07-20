@@ -32,35 +32,21 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-# =====================================================================
-# CONFIGURATION
-# =====================================================================
 KNOWLEDGE_BASE_DIR = os.path.join(os.path.dirname(__file__), "knowledge_base")
 CHROMA_STORE_PATH = os.path.join(os.path.dirname(__file__), "chroma_store")
 COLLECTION_NAME = "techstore_knowledge_base"
 EMBEDDING_MODEL = "text-embedding-3-small"
 
-# Number of chunks to retrieve per query. 3 gives the model enough
-# context without flooding it with irrelevant text.
 DEFAULT_N_RESULTS = 3
 
-# Separate OpenAI client instance, used only for embeddings.
 _openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-# Persistent Chroma client -- writes to a local folder so we don't
-# re-embed documents on every app restart. Telemetry is disabled since
-# it's irrelevant to this project and otherwise logs noisy network
-# errors in restricted/offline environments.
 _chroma_client = chromadb.PersistentClient(
     path=CHROMA_STORE_PATH,
     settings=chromadb.Settings(anonymized_telemetry=False),
 )
 _collection = _chroma_client.get_or_create_collection(name=COLLECTION_NAME)
 
-
-# =====================================================================
-# DOCUMENT LOADING
-# =====================================================================
 def load_documents() -> list[tuple[str, str]]:
     """
     Load every .txt file in knowledge_base/ into memory.
@@ -79,10 +65,6 @@ def load_documents() -> list[tuple[str, str]]:
     logger.info("load_documents: loaded %d document(s)", len(documents))
     return documents
 
-
-# =====================================================================
-# CHUNKING
-# =====================================================================
 def chunk_text(text: str) -> list[str]:
     """
     Split a document's text into paragraph-based chunks.
@@ -101,10 +83,6 @@ def chunk_text(text: str) -> list[str]:
     raw_paragraphs = text.split("\n\n")
     return [paragraph.strip() for paragraph in raw_paragraphs if paragraph.strip()]
 
-
-# =====================================================================
-# EMBEDDING
-# =====================================================================
 def embed_text(text: str) -> list[float]:
     """
     Generate an OpenAI embedding vector for a piece of text.
@@ -118,10 +96,6 @@ def embed_text(text: str) -> list[float]:
     response = _openai_client.embeddings.create(model=EMBEDDING_MODEL, input=text)
     return response.data[0].embedding
 
-
-# =====================================================================
-# BUILDING THE KNOWLEDGE BASE (load + chunk + embed + store)
-# =====================================================================
 def build_knowledge_base() -> None:
     """
     Populate the Chroma collection from knowledge_base/, if it isn't
@@ -161,23 +135,7 @@ def build_knowledge_base() -> None:
     )
     logger.info("build_knowledge_base: ingested %d chunk(s) from %d document(s)", len(chunk_ids), len(documents))
 
-
-# =====================================================================
-# RETRIEVAL
-# =====================================================================
-# Chroma reports distance, not similarity -- LOWER means MORE similar.
-# This is an L2 distance over OpenAI's normalized embeddings (larger =
-# less related). Chunks farther than this threshold are treated as
-# "not actually relevant" rather than forced into the result.
-#
-# Calibrated against real test data (see test_rag.py /
-# debug_retrieve_with_distances): genuine matches across 6 varied
-# questions ranged from 0.64 to 1.02, while a deliberately unrelated
-# question (about scuba gear) scored 1.72 -- a clear separation. 1.3
-# sits safely above the highest real match and well below the known
-# non-match, with margin on both sides.
 MAX_RELEVANT_DISTANCE = 1.3
-
 
 def retrieve_relevant_chunks(query: str, n_results: int = DEFAULT_N_RESULTS) -> list[dict]:
     """
