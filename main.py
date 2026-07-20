@@ -510,7 +510,7 @@ def build_interface() -> gr.ChatInterface:
         fn=chat_function,
         chatbot=styled_chatbot,
         fill_height=True,
-        title="🛍️ TechStore AI Customer Support Assistant",
+        title="TechStore AI Customer Support Assistant",
         description=(
             "Ask about order status, product availability, cancellations, "
             "refund eligibility, or support tickets. If I can't resolve "

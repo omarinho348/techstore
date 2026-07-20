@@ -1,6 +1,11 @@
 Store Information
+
 Customer Support Hours:
+
 Monday-Friday: 9 AM-6 PM
+
 Email: support@techstore.example
+
 Phone: +1-800-555-1000
+
 Physical stores are available in New York, London, and Dubai.
