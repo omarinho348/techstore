@@ -6,10 +6,7 @@ UI configuration for the TechStore AI Customer Support Assistant.
 This file contains:
     - UI asset paths
     - Gradio theme configuration
-    - Custom CSS styling
-
-Keeping UI configuration separate from main.py makes the application
-orchestration code easier to read and maintain.
+    - Custom CSS styling (Including Voice Control layout & responsiveness)
 """
 
 import os
@@ -40,12 +37,6 @@ BOT_AVATAR_PATH = os.path.join(
 # =====================================================================
 # GRADIO THEME
 # =====================================================================
-
-# A dark, purple/cyan-accented theme built on Gradio's base theme.
-#
-# The theme controls the overall visual appearance of Gradio
-# components, including colors, fonts, borders, backgrounds, and
-# buttons.
 
 CUSTOM_THEME = gr.themes.Base(
     primary_hue=gr.themes.colors.purple,
@@ -100,7 +91,7 @@ html, body {
 .gradio-container {
     height: 100vh !important;
     max-height: 100vh !important;
-    overflow: hidden !important;
+    overflow-y: auto !important;
     display: flex !important;
     flex-direction: column !important;
     background: radial-gradient(
@@ -108,11 +99,9 @@ html, body {
         #1e1b4b 0%,
         #0f172a 45%
     ) !important;
+    padding: 16px !important;
 }
 
-/* The main app column should fill available height and lay out its
-   children (title, description, chat panel, textbox) vertically,
-   letting the chat panel be the flexible element that grows/shrinks. */
 .gradio-container > .main,
 .gradio-container > div:first-child {
     height: 100% !important;
@@ -121,25 +110,19 @@ html, body {
     flex-direction: column !important;
 }
 
-/* Title and description stay fixed-size at the top, never shrinking. */
-h1, .prose {
+/* Title and description stay fixed-size at the top */
+h1, p {
     flex-shrink: 0 !important;
 }
 
-/* The chatbot panel grows to fill remaining space and scrolls
-   internally once its content exceeds that space. */
+/* Chatbot panel grows to fill remaining space */
 .techstore-chatbot {
     flex: 1 1 auto !important;
-    min-height: 0 !important;
+    min-height: 250px !important;
     overflow-y: auto !important;
 }
 
-/* The textbox / submit row stays fixed-size at the bottom. */
-form {
-    flex-shrink: 0 !important;
-}
-
-/* Title styling: gradient text, centered, with a soft glow */
+/* Title styling */
 h1 {
     background: linear-gradient(90deg, #c084fc, #67e8f9);
     -webkit-background-clip: text;
@@ -151,10 +134,10 @@ h1 {
     filter: drop-shadow(
         0 0 18px rgba(168, 85, 247, 0.35)
     );
+    margin-bottom: 4px !important;
 }
 
-/* Description subtitle, centered and muted */
-.prose p {
+p {
     text-align: center;
 }
 
@@ -180,12 +163,75 @@ h1 {
     border: 1px solid #334155 !important;
 }
 
-/* Chatbot panel container */
 .bubble-wrap {
     background: transparent !important;
 }
 
-/* Custom scrollbar */
+/* Text Input & Send Row */
+.input-row {
+    display: flex !important;
+    gap: 8px !important;
+    margin-top: 10px !important;
+    align-items: center !important;
+}
+
+.send-btn {
+    border-radius: 12px !important;
+    height: 100% !important;
+}
+
+/* Voice Input Container & Styling */
+.voice-accordion {
+    border: 1px solid #334155 !important;
+    border-radius: 14px !important;
+    background: #1e293b !important;
+    margin-top: 10px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.voice-input-row {
+    gap: 16px !important;
+    align-items: stretch !important;
+    padding: 8px 0 !important;
+}
+
+.audio-component {
+    background: #111827 !important;
+    border-radius: 12px !important;
+    border: 1px solid #334155 !important;
+}
+
+/* Voice & Clear Action Buttons */
+.voice-btn {
+    background: linear-gradient(135deg, #a855f7, #22d3ee) !important;
+    color: #0f172a !important;
+    font-weight: 600 !important;
+    border-radius: 10px !important;
+    margin-bottom: 6px !important;
+}
+
+.clear-btn {
+    background: #334155 !important;
+    color: #f8fafc !important;
+    border-radius: 10px !important;
+    margin-bottom: 8px !important;
+}
+
+.clear-btn:hover {
+    background: #475569 !important;
+}
+
+/* Status Textbox Styling */
+.status-textbox textarea, .status-textbox input {
+    background-color: #0f172a !important;
+    color: #67e8f9 !important;
+    font-weight: 500 !important;
+    border-radius: 8px !important;
+    border: 1px solid #334155 !important;
+    font-size: 0.85rem !important;
+}
+
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
     width: 8px;
 }
@@ -199,29 +245,26 @@ h1 {
     background: transparent;
 }
 
-/* Entrance animation for new messages */
+/* Animations */
 @keyframes fadeInUp {
     from {
         opacity: 0;
         transform: translateY(6px);
     }
-
     to {
         opacity: 1;
         transform: translateY(0);
     }
 }
 
-/* Example prompt chips */
-.example {
-    border-radius: 999px !important;
-    border: 1px solid #7c3aed !important;
-    transition: all 0.15s ease-in-out;
-}
-
-.example:hover {
-    background: rgba(124, 58, 237, 0.15) !important;
-    transform: translateY(-1px);
+/* Responsive Layout Adjustments */
+@media (max-width: 768px) {
+    .voice-input-row {
+        flex-direction: column !important;
+    }
+    .input-row {
+        flex-direction: row !important;
+    }
 }
 
 /* Submit button glow on hover */
