@@ -114,7 +114,7 @@ knowledge_agent = Agent(
 # Tools ONLY: check_order_status, search_products, cancel_order,
 # check_refund_eligibility.
 order_product_agent = Agent(
-    name="Order  Product Agent",
+    name="Order and Product Agent",
     model=_chat_completions_model,
     handoff_description=(
         "Handles order status, product search, order cancellation, and "
