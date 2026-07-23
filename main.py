@@ -284,18 +284,6 @@ def build_interface() -> gr.Blocks:
                         placeholder="Awaiting audio recording...",
                     )
 
-        # Example Prompts
-        gr.Examples(
-            examples=[
-                "What's the status of order 1001?",
-                "Do you have any laptops in stock?",
-                "What is your return policy?",
-                "Am I eligible for a refund on order 1003?",
-            ],
-            inputs=msg_input,
-            label="Try an example:",
-        )
-
         # -------------------------------------------------------------
         # EVENT HANDLERS
         # -------------------------------------------------------------
