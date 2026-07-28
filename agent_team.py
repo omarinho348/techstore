@@ -60,9 +60,6 @@ _chat_completions_model = OpenAIChatCompletionsModel(
     openai_client=_async_openai_client,
 )
 
-# =====================================================================
-# WRAP EXISTING TOOLS (no redefinition -- just schema generation)
-# =====================================================================
 check_order_status_tool = function_tool(check_order_status)
 search_products_tool = function_tool(search_products)
 cancel_order_tool = function_tool(cancel_order)
@@ -71,13 +68,6 @@ ticket_inquiry_tool = function_tool(ticket_inquiry)
 send_support_email_tool = function_tool(send_support_email)
 search_knowledge_base_tool = function_tool(search_knowledge_base)
 
-
-# =====================================================================
-# KNOWLEDGE AGENT
-# =====================================================================
-# Tool ONLY: search_knowledge_base. Short, focused instructions -- just
-# the rules relevant to RAG-backed policy/FAQ answers, not the full
-# Week 2/3 system prompt.
 knowledge_agent = Agent(
     name="Knowledge Agent",
     model=_chat_completions_model,
@@ -107,12 +97,6 @@ knowledge_agent = Agent(
     tools=[search_knowledge_base_tool],
 )
 
-
-# =====================================================================
-# ORDER & PRODUCT AGENT
-# =====================================================================
-# Tools ONLY: check_order_status, search_products, cancel_order,
-# check_refund_eligibility.
 order_product_agent = Agent(
     name="Order and Product Agent",
     model=_chat_completions_model,
@@ -157,11 +141,6 @@ order_product_agent = Agent(
     ],
 )
 
-
-# =====================================================================
-# SUPPORT AGENT
-# =====================================================================
-# Tools ONLY: ticket_inquiry, send_support_email.
 support_agent = Agent(
     name="Support Agent",
     model=_chat_completions_model,
@@ -233,12 +212,6 @@ calling the send_support_email tool.
     tools=[ticket_inquiry_tool, send_support_email_tool],
 )
 
-
-# =====================================================================
-# TRIAGE AGENT
-# =====================================================================
-# No business tools of its own -- its only job is reading the request
-# and routing to the right specialist via a handoff.
 triage_agent = Agent(
     name="Triage Agent",
     model=_chat_completions_model,
@@ -295,19 +268,6 @@ answer be generated.
     handoffs=[order_product_agent, support_agent, knowledge_agent],
 )
 
-
-# =====================================================================
-# SPECIALIST-TO-SPECIALIST HANDOFFS (mesh)
-# =====================================================================
-# Each specialist can hand off directly to either of the other two,
-# without looping back through triage -- this is what lets a single
-# conversation move from a policy question (Knowledge Agent) straight
-# into an order-specific follow-up (Order & Product Agent) in one turn.
-#
-# Agent.handoffs is a plain mutable list, so we wire these up after all
-# three specialists already exist, avoiding a circular-definition
-# problem (each agent would otherwise need to reference the others
-# before they're fully constructed).
 order_product_agent.handoffs = [support_agent, knowledge_agent]
 support_agent.handoffs = [order_product_agent, knowledge_agent]
 knowledge_agent.handoffs = [order_product_agent, support_agent]
