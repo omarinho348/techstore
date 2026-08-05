@@ -22,6 +22,7 @@ import os
 from agents import Agent, OpenAIChatCompletionsModel, function_tool
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
+from agents import RunContextWrapper
 
 from tools import (
     cancel_order,
@@ -31,6 +32,7 @@ from tools import (
     search_products,
     send_support_email,
     ticket_inquiry,
+    get_my_orders,
 )
 
 load_dotenv()
@@ -67,6 +69,7 @@ check_refund_eligibility_tool = function_tool(check_refund_eligibility)
 ticket_inquiry_tool = function_tool(ticket_inquiry)
 send_support_email_tool = function_tool(send_support_email)
 search_knowledge_base_tool = function_tool(search_knowledge_base)
+get_my_orders_tool = function_tool(get_my_orders)
 
 knowledge_agent = Agent(
     name="Knowledge Agent",
@@ -132,12 +135,42 @@ order_product_agent = Agent(
         "order/product part first if you have it, then hand off to the "
         "right specialist for the rest -- do not just answer half the "
         "question and stop."
+        "If the customer asks about:"
+
+        "- my orders"
+        "- my purchases"
+        "- my latest order"
+        "- orders I placed"
+        "- what have I bought"
+
+        "call get_my_orders."
+
+        "The customer's authenticated email is already available"
+        "in the system prompt."
+
+        "Do not ask for their email."
+        "When get_my_orders returns order items:"
+
+"1. Mention each product name."
+
+"2. Mention its quantity."
+
+"3. Mention the current stock if available."
+
+"4. Mention the order status."
+
+"5. Mention the order total."
+
+"6. Do not simply print raw JSON."
+
+"7. Present the information naturally in a customer-friendly format."
     ),
     tools=[
         check_order_status_tool,
         search_products_tool,
         cancel_order_tool,
         check_refund_eligibility_tool,
+        get_my_orders_tool,
     ],
 )
 

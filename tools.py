@@ -512,3 +512,63 @@ async def search_knowledge_base(
         "results": relevant_chunks,
     }
 
+# =====================================================================
+# TOOL 8: GET MY ORDERS
+# =====================================================================
+
+async def get_my_orders(customer_email: str):
+    """
+    Return every order belonging to the authenticated customer.
+    """
+
+    customer = await Customer.find_one(
+        Customer.email == customer_email
+    )
+
+    if customer is None:
+        return {
+            "found": False,
+            "orders": [],
+        }
+
+    orders = await Order.find(
+        Order.customer_id == str(customer.id)
+    ).sort(
+        -Order.created_at
+    ).to_list()
+
+    order_list = []
+
+    for order in orders:
+
+        items = []
+
+        for item in order.items:
+
+            product = await Product.get(item.product_id)
+
+            items.append(
+                {
+                    "title": item.product_name,
+                    "quantity": item.quantity,
+                    "unit_price": item.unit_price,
+                    "subtotal": item.subtotal,
+                    "stock": product.stock if product else "Unknown",
+                }
+            )
+
+        order_list.append(
+            {
+                "order_id": str(order.id),
+                "status": order.status.value,
+                "total": order.total,
+                "created_at": order.created_at.isoformat(),
+                "items": items,
+            }
+        )
+
+    return {
+        "found": True,
+        "count": len(order_list),
+        "orders": order_list,
+    }

@@ -3,6 +3,7 @@ from .order import Order
 from .customer import Customer
 from .ticket import Ticket
 from .message_log import MessageLog
+from .conversation import Conversation
 
 __all__ = [
     "Product",
@@ -10,4 +11,5 @@ __all__ = [
     "Customer",
     "Ticket",
     "MessageLog",
+    "Conversation",
 ]

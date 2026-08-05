@@ -10,6 +10,7 @@ from api.models import (
     Customer,
     Ticket,
     MessageLog,
+    Conversation,
 )
 
 
@@ -58,6 +59,7 @@ async def init_db():
             Customer,
             Ticket,
             MessageLog,
+            Conversation,
         ],
     )
 

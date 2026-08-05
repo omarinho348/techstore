@@ -6,22 +6,12 @@ from pydantic import Field
 
 
 class MessageRole(str, Enum):
-    """
-    The role of a message in a conversation.
-    """
-
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
 
 
 class MessageLog(Document):
-    """
-    A single message stored in MongoDB.
-
-    Messages are grouped by session_id so that
-    different conversations remain isolated.
-    """
 
     session_id: str = Field(
         ...,
@@ -42,6 +32,7 @@ class MessageLog(Document):
     )
 
     class Settings:
+
         name = "message_logs"
 
         indexes = [

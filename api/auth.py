@@ -1,6 +1,11 @@
 import os
 from datetime import datetime, timedelta, timezone
 
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from api.models.customer import Customer
+
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
@@ -9,6 +14,8 @@ JWT_SECRET_KEY = os.environ.get(
     "JWT_SECRET_KEY",
     "change-this-secret-in-production",
 )
+
+print("JWT SECRET:", JWT_SECRET_KEY)
 
 JWT_ALGORITHM = "HS256"
 
@@ -20,6 +27,7 @@ pwd_context = CryptContext(
     deprecated="auto",
 )
 
+security = HTTPBearer()
 
 def hash_password(password: str) -> str:
     """
@@ -87,5 +95,44 @@ def decode_access_token(
 
         return str(customer_id)
 
-    except JWTError:
+    except JWTError as e:
+        print("=" * 50)
+        print("JWT ERROR:", repr(e))
         return None
+
+async def get_current_customer(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> Customer:
+
+    print("=" * 50)
+    print("Authorization header received")
+    print(credentials.credentials)
+
+    token = credentials.credentials
+
+    customer_id = decode_access_token(token)
+
+    print("Decoded customer_id:", customer_id)
+
+    if customer_id is None:
+        print("JWT decoding failed")
+
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token.",
+        )
+
+    customer = await Customer.get(customer_id)
+
+    print("Customer:", customer)
+
+    if customer is None:
+
+        print("Customer not found")
+
+        raise HTTPException(
+            status_code=401,
+            detail="Customer not found.",
+        )
+
+    return customer
