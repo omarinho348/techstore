@@ -113,14 +113,27 @@ async def search_products(keyword: str) -> dict[str, Any]:
 
     products = await Product.find_all().to_list()
 
-    matches = [
-        product
-        for product in products
-        if (
-            normalized_keyword in product.name.lower()
-            or normalized_keyword in product.category.lower()
-        )
-    ]
+    if normalized_keyword in {
+        "",
+        "all",
+        "available",
+        "in stock",
+        "available in stock",
+        "stock",
+        "catalog",
+        "products",
+        "product",
+    }:
+        matches = [product for product in products if product.stock > 0]
+    else:
+        matches = [
+            product
+            for product in products
+            if (
+                normalized_keyword in product.name.lower()
+                or normalized_keyword in product.category.lower()
+            )
+        ]
 
     if not matches:
         logger.info(

@@ -46,6 +46,8 @@ export function ConversationProvider({ children }) {
             conversation.session_id
         );
 
+        return conversation.session_id;
+
     }
 
     async function deleteConversation(sessionId) {

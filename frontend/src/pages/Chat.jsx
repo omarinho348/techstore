@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRef } from "react";
 
 import MainLayout from "../layouts/MainLayout";
 
@@ -12,10 +13,14 @@ import { useConversations } from "../contexts/ConversationContext";
 export default function Chat() {
 
     const [messages, setMessages] = useState([]);
+    const skipNextEmptyHistoryLoad = useRef(false);
+    const typingQueue = useRef("");
+    const typingTimer = useRef(null);
 
     const {
         currentSessionId,
         loadConversations,
+        newConversation,
     } = useConversations();
 
     useEffect(() => {
@@ -37,6 +42,16 @@ export default function Chat() {
                         currentSessionId
                     );
 
+                if (
+                    skipNextEmptyHistoryLoad.current &&
+                    (result.messages ?? []).length === 0
+                ) {
+                    skipNextEmptyHistoryLoad.current = false;
+                    return;
+                }
+
+                skipNextEmptyHistoryLoad.current = false;
+
                 setMessages(result.messages ?? []);
 
             }
@@ -51,12 +66,69 @@ export default function Chat() {
 
         loadHistory();
 
+        return () => {
+            stopTypingTimer();
+            typingQueue.current = "";
+        };
+
     }, [currentSessionId]);
+
+    function stopTypingTimer() {
+        if (typingTimer.current) {
+            clearInterval(typingTimer.current);
+            typingTimer.current = null;
+        }
+    }
+
+    function startTypingTimer() {
+        if (typingTimer.current) {
+            return;
+        }
+
+        typingTimer.current = setInterval(() => {
+            if (!typingQueue.current) {
+                stopTypingTimer();
+                return;
+            }
+
+            const nextChar = typingQueue.current[0];
+            typingQueue.current = typingQueue.current.slice(1);
+
+            setMessages((previous) => {
+                const updated = [...previous];
+
+                if (updated.length === 0) {
+                    return previous;
+                }
+
+                const lastIndex = updated.length - 1;
+                updated[lastIndex] = {
+                    ...updated[lastIndex],
+                    message:
+                        (updated[lastIndex].message ?? "") + nextChar,
+                };
+
+                return updated;
+            });
+
+        }, 16);
+    }
 
     async function handleSend(message) {
 
-    if (!currentSessionId)
+    stopTypingTimer();
+    typingQueue.current = "";
+
+    let sessionId = currentSessionId;
+
+    if (!sessionId) {
+        skipNextEmptyHistoryLoad.current = true;
+        sessionId = await newConversation();
+    }
+
+    if (!sessionId) {
         return;
+    }
 
     // ==========================================================
     // Add user message
@@ -84,7 +156,7 @@ export default function Chat() {
 
     await chatService.sendMessage(
 
-        currentSessionId,
+        sessionId,
 
         message,
 
@@ -137,32 +209,18 @@ export default function Chat() {
             // --------------------------------------------------
 
             token: ({ text }) => {
-
-                setMessages((previous) => {
-
-                    const updated = [...previous];
-
-                    updated[updated.length - 1] = {
-
-                        ...updated[updated.length - 1],
-
-                        message:
-
-                            updated[
-                                updated.length - 1
-                            ].message + text,
-
-                    };
-
-                    return updated;
-
-                });
+                typingQueue.current += text;
+                startTypingTimer();
 
             },
 
             // --------------------------------------------------
 
             done: () => {
+
+                if (!typingQueue.current) {
+                    stopTypingTimer();
+                }
 
                 setMessages((previous) => {
 
