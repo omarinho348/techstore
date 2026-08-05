@@ -9,13 +9,13 @@ from agents import Runner
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
+from agent_team import triage_agent
+
 from api.auth import get_current_customer
 from api.models.conversation import Conversation
 from api.models.customer import Customer
 from api.models.message_log import MessageLog, MessageRole
 from api.schemas.chat import ChatRequest, ChatResponse
-
-from agent_team import triage_agent
 
 
 router = APIRouter(
@@ -25,7 +25,6 @@ router = APIRouter(
 
 
 def generate_title(message: str) -> str:
-
     words = message.strip().split()
 
     if not words:
@@ -39,10 +38,7 @@ def generate_title(message: str) -> str:
     return title
 
 
-def build_customer_context(
-    customer: Customer,
-) -> str:
-
+def build_customer_context(customer: Customer) -> str:
     return f"""
 You are TechStore's AI assistant.
 
@@ -65,81 +61,66 @@ Never ask the user for their email.
 """
 
 
-async def load_history(
+async def get_owned_conversation(
     session_id: str,
+    current_customer: Customer,
 ):
+    return await Conversation.find_one(
+        Conversation.session_id == session_id,
+        Conversation.customer_id == str(current_customer.id),
+    )
 
+
+async def load_history(session_id: str):
     return await MessageLog.find(
-        MessageLog.session_id == session_id
+        MessageLog.session_id == session_id,
     ).sort(
-        MessageLog.created_at
+        MessageLog.created_at,
     ).to_list()
 
 
 async def update_conversation(
-    session_id: str,
+    conversation: Conversation,
     first_message: str,
     previous_messages,
 ):
+    conversation.updated_at = datetime.now(timezone.utc)
 
-    conversation = await Conversation.find_one(
-        Conversation.session_id == session_id
-    )
-
-    if conversation is None:
-        return
-
-    conversation.updated_at = datetime.now(
-        timezone.utc,
-    )
-
-    if (
-        conversation.title == "New Chat"
-        and len(previous_messages) == 0
-    ):
-        conversation.title = generate_title(
-            first_message,
-        )
+    if conversation.title == "New Chat" and len(previous_messages) == 0:
+        conversation.title = generate_title(first_message)
 
     await conversation.save()
 
 
 def build_input_items(
     previous_messages,
-    customer_context,
-    new_message,
+    customer_context: str,
+    new_message: str,
 ):
-
     items = [
-
         {
             "role": "system",
             "content": customer_context,
         }
-
     ]
 
     for message in previous_messages:
-
         items.append(
-
             {
                 "role": message.role.value,
                 "content": message.message,
             }
-
         )
 
     items.append(
-
         {
             "role": "user",
             "content": new_message,
         }
-
     )
 
     return items
+
 
 @router.post(
     "",
@@ -147,26 +128,29 @@ def build_input_items(
 )
 async def chat(
     request: ChatRequest,
-    current_customer: Customer = Depends(
-        get_current_customer,
-    ),
+    current_customer: Customer = Depends(get_current_customer),
 ):
-
     try:
-
-        previous_messages = await load_history(
+        conversation = await get_owned_conversation(
             request.session_id,
+            current_customer,
         )
 
+        if conversation is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Conversation not found.",
+            )
+
+        previous_messages = await load_history(request.session_id)
+
         await update_conversation(
-            request.session_id,
+            conversation,
             request.message,
             previous_messages,
         )
 
-        customer_context = build_customer_context(
-            current_customer,
-        )
+        customer_context = build_customer_context(current_customer)
 
         input_items = build_input_items(
             previous_messages,
@@ -174,13 +158,11 @@ async def chat(
             request.message,
         )
 
-        user_message = MessageLog(
+        await MessageLog(
             session_id=request.session_id,
             role=MessageRole.USER,
             message=request.message,
-        )
-
-        await user_message.insert()
+        ).insert()
 
         result = await Runner.run(
             triage_agent,
@@ -188,15 +170,12 @@ async def chat(
         )
 
         if result.final_output is None:
-
             raise HTTPException(
                 status_code=500,
                 detail="The agent did not generate a response.",
             )
 
-        assistant_response = str(
-            result.final_output,
-        )
+        assistant_response = str(result.final_output)
 
         assistant_message = MessageLog(
             session_id=request.session_id,
@@ -213,46 +192,45 @@ async def chat(
         )
 
     except HTTPException:
-
         raise
 
     except Exception as error:
-
-        print(
-            "Chat processing error:",
-            error,
-        )
+        print("Chat processing error:", error)
 
         raise HTTPException(
             status_code=500,
             detail="Chat processing failed.",
-        )
+        ) from error
+
 
 @router.post(
     "/stream",
 )
 async def stream_chat(
     request: ChatRequest,
-    current_customer: Customer = Depends(
-        get_current_customer,
-    ),
+    current_customer: Customer = Depends(get_current_customer),
 ):
-
     async def event_generator():
-
-        previous_messages = await load_history(
+        conversation = await get_owned_conversation(
             request.session_id,
+            current_customer,
         )
 
+        if conversation is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Conversation not found.",
+            )
+
+        previous_messages = await load_history(request.session_id)
+
         await update_conversation(
-            request.session_id,
+            conversation,
             request.message,
             previous_messages,
         )
 
-        customer_context = build_customer_context(
-            current_customer,
-        )
+        customer_context = build_customer_context(current_customer)
 
         input_items = build_input_items(
             previous_messages,
@@ -260,13 +238,11 @@ async def stream_chat(
             request.message,
         )
 
-        user_message = MessageLog(
+        await MessageLog(
             session_id=request.session_id,
             role=MessageRole.USER,
             message=request.message,
-        )
-
-        await user_message.insert()
+        ).insert()
 
         result = Runner.run_streamed(
             triage_agent,
@@ -276,96 +252,59 @@ async def stream_chat(
         assistant_response = ""
 
         async for event in result.stream_events():
-
             event_name = type(event).__name__
 
-            # ==========================================================
-            # Agent changed
-            # ==========================================================
-
             if event_name == "AgentUpdatedStreamEvent":
-
                 yield (
                     "event: agent\n"
                     f"data: {json.dumps({'name': event.new_agent.name})}\n\n"
                 )
 
-            # ==========================================================
-            # Tool calls / handoffs
-            # ==========================================================
-
             elif event_name == "RunItemStreamEvent":
-
                 item = event.item
 
                 if hasattr(item, "raw_item"):
-
                     raw_item = item.raw_item
 
                     if hasattr(raw_item, "name"):
-
                         tool = raw_item.name
 
                         friendly = {
-
                             "transfer_to_order_and_product_agent":
                                 "Routing to Order & Product Agent...",
-
                             "transfer_to_knowledge_agent":
                                 "Routing to Knowledge Agent...",
-
                             "transfer_to_support_agent":
                                 "Routing to Support Agent...",
-
                             "check_order_status":
                                 "Checking your order...",
-
                             "get_my_orders":
                                 "Retrieving your orders...",
-
                             "search_products":
                                 "Searching products...",
-
                             "cancel_order":
                                 "Cancelling your order...",
-
                             "check_refund_eligibility":
                                 "Checking refund eligibility...",
-
                             "ticket_inquiry":
                                 "Looking up your support ticket...",
-
                             "send_support_email":
                                 "Sending support email...",
-
                             "search_knowledge_base":
                                 "Searching our knowledge base...",
-
                         }.get(tool)
 
                         if friendly:
-
                             yield (
                                 "event: status\n"
                                 f"data: {json.dumps({'text': friendly})}\n\n"
                             )
 
-            # ==========================================================
-            # OpenAI streaming events
-            # ==========================================================
-
             elif event_name == "RawResponsesStreamEvent":
-
                 raw = event.data
-
                 raw_name = type(raw).__name__
 
-                # ------------------------------------------------------
-                # Text token
-                # ------------------------------------------------------
-
                 if raw_name == "ResponseTextDeltaEvent":
-
                     assistant_response += raw.delta
 
                     yield (
@@ -373,59 +312,22 @@ async def stream_chat(
                         f"data: {json.dumps({'text': raw.delta})}\n\n"
                     )
 
-                # ------------------------------------------------------
-                # Finished
-                # ------------------------------------------------------
-
-                elif raw_name == "ResponseCompletedEvent":
-
-                    pass
-
         while not result.is_complete:
-
             await result.run_loop_task
 
         if not assistant_response and result.final_output is not None:
+            assistant_response = str(result.final_output)
 
-            assistant_response = str(
-                result.final_output,
-            )
-
-        assistant_message = MessageLog(
+        await MessageLog(
             session_id=request.session_id,
             role=MessageRole.ASSISTANT,
             message=assistant_response,
-        )
-
-        await assistant_message.insert()
+        ).insert()
 
         yield (
-            "event: done\n"
-            "data: {}\n\n"
+            "event: final\n"
+            f"data: {json.dumps({'response': assistant_response})}\n\n"
         )
-
-        while not result.is_complete:
-
-            await result.run_loop_task
-
-        if result.final_output is not None:
-
-            assistant_response = str(
-                result.final_output,
-            )
-
-            assistant_message = MessageLog(
-                session_id=request.session_id,
-                role=MessageRole.ASSISTANT,
-                message=assistant_response,
-            )
-
-            await assistant_message.insert()
-
-            yield (
-                f"event: final\n"
-                f"data: {json.dumps({'response': assistant_response})}\n\n"
-            )
 
         yield (
             "event: done\n"
@@ -437,19 +339,34 @@ async def stream_chat(
         media_type="text/event-stream",
     )
 
+
 @router.get(
     "/{session_id}",
 )
-async def get_chat_history(session_id: str):
+async def get_chat_history(
+    session_id: str,
+    current_customer: Customer = Depends(get_current_customer),
+):
     """
     Retrieve all messages belonging to a conversation session.
     """
 
     try:
+        conversation = await get_owned_conversation(
+            session_id,
+            current_customer,
+        )
+
+        if conversation is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Conversation not found.",
+            )
+
         messages = await MessageLog.find(
-            MessageLog.session_id == session_id
+            MessageLog.session_id == session_id,
         ).sort(
-            MessageLog.created_at
+            MessageLog.created_at,
         ).to_list()
 
         return {
@@ -464,6 +381,9 @@ async def get_chat_history(session_id: str):
             ],
         }
 
+    except HTTPException:
+        raise
+
     except Exception as error:
         print(f"Chat history error: {error}")
 
@@ -476,14 +396,30 @@ async def get_chat_history(session_id: str):
 @router.delete(
     "/{session_id}",
 )
-async def delete_chat_history(session_id: str):
+async def delete_chat_history(
+    session_id: str,
+    current_customer: Customer = Depends(get_current_customer),
+):
     """
     Delete all messages belonging to a chat session.
     """
 
+    conversation = await get_owned_conversation(
+        session_id,
+        current_customer,
+    )
+
+    if conversation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found.",
+        )
+
     deleted_count = await MessageLog.find(
-        MessageLog.session_id == session_id
+        MessageLog.session_id == session_id,
     ).delete()
+
+    await conversation.delete()
 
     return {
         "session_id": session_id,

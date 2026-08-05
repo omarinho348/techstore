@@ -1,16 +1,15 @@
 import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 
-from fastapi import HTTPException
-
-from api.models.message_log import MessageLog
-from api.schemas.conversation import DeleteConversationResponse
-
+from api.auth import get_current_customer
 from api.models.conversation import Conversation
+from api.models.customer import Customer
+from api.models.message_log import MessageLog
 from api.schemas.conversation import (
     ConversationResponse,
     CreateConversationResponse,
+    DeleteConversationResponse,
 )
 
 router = APIRouter(
@@ -23,14 +22,17 @@ router = APIRouter(
     "",
     response_model=list[ConversationResponse],
 )
-async def get_conversations():
+async def get_conversations(
+    current_customer: Customer = Depends(get_current_customer),
+):
     """
-    Retrieve all conversations.
-    Later this will return only the logged-in user's conversations.
+    Retrieve only the logged-in customer's conversations.
     """
 
     conversations = (
-        await Conversation.find_all()
+        await Conversation.find(
+            Conversation.customer_id == str(current_customer.id)
+        )
         .sort(-Conversation.updated_at)
         .to_list()
     )
@@ -42,15 +44,17 @@ async def get_conversations():
     "",
     response_model=CreateConversationResponse,
 )
-async def create_conversation():
+async def create_conversation(
+    current_customer: Customer = Depends(get_current_customer),
+):
     """
-    Create a new conversation.
+    Create a new conversation for the logged-in customer.
     """
 
     session_id = str(uuid.uuid4())
 
     conversation = Conversation(
-        customer_id="TEMP_CUSTOMER",
+        customer_id=str(current_customer.id),
         session_id=session_id,
         title="New Chat",
     )
@@ -62,19 +66,22 @@ async def create_conversation():
         title=conversation.title,
     )
 
+
 @router.delete(
     "/{session_id}",
     response_model=DeleteConversationResponse,
 )
 async def delete_conversation(
     session_id: str,
+    current_customer: Customer = Depends(get_current_customer),
 ):
     """
     Delete a conversation and all of its messages.
     """
 
     conversation = await Conversation.find_one(
-        Conversation.session_id == session_id
+        Conversation.session_id == session_id,
+        Conversation.customer_id == str(current_customer.id),
     )
 
     if conversation is None:

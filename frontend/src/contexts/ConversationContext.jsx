@@ -5,11 +5,14 @@ import {
     useState,
 } from "react";
 
+import { useAuth } from "./AuthContext";
 import * as conversationService from "../services/conversationService";
 
 const ConversationContext = createContext();
 
 export function ConversationProvider({ children }) {
+
+    const { user } = useAuth();
 
     const [conversations, setConversations] = useState([]);
 
@@ -23,15 +26,20 @@ export function ConversationProvider({ children }) {
 
         setConversations(data);
 
-        // Only choose a default conversation
-        // if none is currently selected.
-        if (!currentSessionId && data.length > 0) {
+        setCurrentSessionId((previousSessionId) => {
 
-            setCurrentSessionId(
-                data[0].session_id
-            );
+            if (
+                previousSessionId &&
+                data.some((conversation) =>
+                    conversation.session_id === previousSessionId
+                )
+            ) {
+                return previousSessionId;
+            }
 
-        }
+            return data[0]?.session_id ?? null;
+
+        });
 
     }
 
@@ -83,9 +91,18 @@ export function ConversationProvider({ children }) {
 
     useEffect(() => {
 
+        if (!user) {
+
+            setConversations([]);
+            setCurrentSessionId(null);
+
+            return;
+
+        }
+
         loadConversations();
 
-    }, []);
+    }, [user]);
 
     return (
 

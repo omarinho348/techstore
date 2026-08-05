@@ -8,6 +8,7 @@ import ChatInput from "../components/ChatInput";
 
 import * as chatService from "../services/chatService";
 
+import { useAuth } from "../contexts/AuthContext";
 import { useConversations } from "../contexts/ConversationContext";
 
 export default function Chat() {
@@ -16,6 +17,8 @@ export default function Chat() {
     const skipNextEmptyHistoryLoad = useRef(false);
     const typingQueue = useRef("");
     const typingTimer = useRef(null);
+
+    const { user } = useAuth();
 
     const {
         currentSessionId,
@@ -254,6 +257,7 @@ export default function Chat() {
 
                 <ChatWindow
                     messages={messages}
+                    userName={user?.name}
                 />
 
                 <ChatInput
