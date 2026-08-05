@@ -1,10 +1,10 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import { useAuth } from "../contexts/AuthContext";
 import { useConversations } from "../contexts/ConversationContext";
 
 export default function Sidebar() {
-    const { user, logout } = useAuth();
+    const { user } = useAuth();
 
     const {
         conversations,
@@ -12,13 +12,6 @@ export default function Sidebar() {
         deleteConversation,
         setCurrentSessionId,
     } = useConversations();
-
-    const navigate = useNavigate();
-
-    function handleLogout() {
-        logout();
-        navigate("/login");
-    }
 
     return (
         <aside className="flex h-screen w-72 flex-col bg-[#171717] p-4 text-white">
@@ -151,13 +144,6 @@ export default function Sidebar() {
                 <p className="mb-4 text-sm text-neutral-400">
                     {user?.email}
                 </p>
-
-                <button
-                    onClick={handleLogout}
-                    className="w-full rounded-lg bg-red-600 p-3 transition hover:bg-red-500"
-                >
-                    Logout
-                </button>
 
             </div>
 

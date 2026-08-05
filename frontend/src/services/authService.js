@@ -1,5 +1,5 @@
 import * as authApi from "../api/authApi";
-import { saveUser, removeUser } from "../utils/storage";
+import { getUser, saveUser, removeUser } from "../utils/storage";
 
 export async function register(data) {
     const result = await authApi.register(data);
@@ -19,4 +19,22 @@ export async function login(data) {
 
 export function logout() {
     removeUser();
+}
+
+export async function getMe() {
+    return authApi.getMe();
+}
+
+export async function updateProfile(data) {
+    const result = await authApi.updateMe(data);
+    const currentUser = getUser();
+
+    const updatedUser = {
+        ...currentUser,
+        ...result,
+    };
+
+    saveUser(updatedUser);
+
+    return updatedUser;
 }

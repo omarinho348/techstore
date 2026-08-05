@@ -1,10 +1,10 @@
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import Depends
 
-from api.auth import get_current_customer
+from api.auth import get_current_customer, hash_password, verify_password
 from api.models.customer import Customer
 from api.database import init_db, close_db
 from api.routers.products import router as products_router
@@ -14,6 +14,7 @@ from api.routers.tickets import router as tickets_router
 from api.routers.auth import router as auth_router
 from api.routers.conversations import router as conversations_router
 from api.routers.voice import router as voice_router
+from api.schemas.auth import CustomerProfileResponse, UpdateProfileRequest
 from fastapi.staticfiles import StaticFiles
 
 @asynccontextmanager
@@ -76,14 +77,80 @@ async def health_check():
         "service": "TechStore Backend API",
     }
 
-@app.get("/me")
+@app.get("/me", response_model=CustomerProfileResponse)
 async def get_me(
     customer: Customer = Depends(
         get_current_customer
     ),
 ):
-    return {
-        "id": str(customer.id),
-        "name": customer.name,
-        "email": customer.email,
-    }
+    return CustomerProfileResponse(
+        customer_id=str(customer.id),
+        name=customer.name,
+        email=customer.email,
+        created_at=customer.created_at,
+        updated_at=customer.updated_at,
+    )
+
+
+@app.patch("/me", response_model=CustomerProfileResponse)
+async def update_me(
+    request: UpdateProfileRequest,
+    customer: Customer = Depends(
+        get_current_customer
+    ),
+):
+    if (
+        request.name is None
+        and request.email is None
+        and request.new_password is None
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="At least one field must be provided.",
+        )
+
+    if request.email and request.email != customer.email:
+        existing_customer = await Customer.find_one(
+            Customer.email == request.email,
+        )
+
+        if existing_customer and existing_customer.id != customer.id:
+            raise HTTPException(
+                status_code=409,
+                detail="A customer with this email already exists.",
+            )
+
+        customer.email = request.email
+
+    if request.name is not None:
+        customer.name = request.name
+
+    if request.new_password is not None:
+        if not request.current_password:
+            raise HTTPException(
+                status_code=400,
+                detail="Current password is required to change your password.",
+            )
+
+        if not verify_password(
+            request.current_password,
+            customer.password_hash,
+        ):
+            raise HTTPException(
+                status_code=401,
+                detail="Current password is incorrect.",
+            )
+
+        customer.password_hash = hash_password(request.new_password)
+
+    customer.updated_at = datetime.now(timezone.utc)
+
+    await customer.save()
+
+    return CustomerProfileResponse(
+        customer_id=str(customer.id),
+        name=customer.name,
+        email=customer.email,
+        created_at=customer.created_at,
+        updated_at=customer.updated_at,
+    )

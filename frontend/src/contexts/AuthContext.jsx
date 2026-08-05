@@ -13,15 +13,38 @@ export function AuthProvider({ children }) {
 
     useEffect(() => {
 
-        const savedUser = getUser();
+        async function initializeAuth() {
 
-        if (savedUser) {
+            const savedUser = getUser();
 
-            setUser(savedUser);
+            if (!savedUser) {
+
+                setLoading(false);
+
+                return;
+
+            }
+
+            try {
+
+                const profile = await authService.getMe();
+
+                setUser({
+                    ...savedUser,
+                    ...profile,
+                });
+
+            } catch {
+
+                setUser(savedUser);
+
+            }
+
+            setLoading(false);
 
         }
 
-        setLoading(false);
+        initializeAuth();
 
     }, []);
 
@@ -51,6 +74,16 @@ export function AuthProvider({ children }) {
 
     }
 
+    async function updateProfile(data) {
+
+        const result = await authService.updateProfile(data);
+
+        setUser(result);
+
+        return result;
+
+    }
+
     return (
 
         <AuthContext.Provider
@@ -60,6 +93,7 @@ export function AuthProvider({ children }) {
                 loading,
                 login,
                 register,
+                updateProfile,
                 logout,
             }}
 

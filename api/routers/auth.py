@@ -58,6 +58,8 @@ async def register(
         customer_id=str(customer.id),
         name=customer.name,
         email=customer.email,
+        created_at=customer.created_at,
+        updated_at=customer.updated_at,
         access_token=access_token,
     )
 
@@ -100,5 +102,7 @@ async def login(
         customer_id=str(customer.id),
         name=customer.name,
         email=customer.email,
+        created_at=customer.created_at,
+        updated_at=customer.updated_at,
         access_token=access_token,
     )

@@ -9,13 +9,13 @@ export default function Login() {
 
     const { user, login } = useAuth();
 
-    if (user) {
-    return <Navigate to="/" replace />;
-}
-
     const [email, setEmail] = useState("");
 
     const [password, setPassword] = useState("");
+
+    if (user) {
+        return <Navigate to="/" replace />;
+    }
 
     async function handleSubmit(e) {
 
@@ -46,21 +46,29 @@ alert(
 
     return (
 
-        <div className="flex h-screen items-center justify-center bg-neutral-900">
+        <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.16),_transparent_35%),linear-gradient(135deg,_#0a0f0d,_#111827_45%,_#050816)] px-4 text-white">
 
             <form
                 onSubmit={handleSubmit}
-                className="w-96 rounded-xl bg-neutral-800 p-8"
+                className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur-xl"
             >
 
-                <h1 className="mb-6 text-3xl font-bold">
+                <p className="mb-2 text-sm uppercase tracking-[0.35em] text-green-300/80">
+                    TechStore AI
+                </p>
+
+                <h1 className="mb-2 text-4xl font-bold">
 
                     Login
 
                 </h1>
 
+                <p className="mb-8 text-sm text-neutral-300">
+                    Sign in to manage chats, orders, and your profile.
+                </p>
+
                 <input
-                    className="mb-4 w-full rounded border border-neutral-600 bg-neutral-900 p-3"
+                    className="mb-4 w-full rounded-2xl border border-white/10 bg-black/30 p-3 outline-none transition placeholder:text-neutral-500 focus:border-green-400"
                     placeholder="Email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -68,32 +76,31 @@ alert(
 
                 <input
                     type="password"
-                    className="mb-6 w-full rounded border border-neutral-600 bg-neutral-900 p-3"
+                    className="mb-6 w-full rounded-2xl border border-white/10 bg-black/30 p-3 outline-none transition placeholder:text-neutral-500 focus:border-green-400"
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                 />
 
                 <button
-                    className="w-full rounded bg-green-500 p-3 font-bold"
+                    className="w-full rounded-2xl bg-green-500 p-3 font-bold text-black transition hover:bg-green-400"
                 >
                     Login
                 </button>
+
+                <p className="mt-6 text-center text-sm text-neutral-300">
+                    Don&apos;t have an account?{" "}
+                    <Link
+                        to="/register"
+                        className="font-semibold text-green-300 hover:underline"
+                    >
+                        Create one
+                    </Link>
+                </p>
 
             </form>
 
         </div>
 
     );
-
-
-    <p className="mt-6 text-center text-sm text-neutral-400">
-    Don't have an account?{" "}
-    <Link
-        to="/register"
-        className="text-green-400 hover:underline"
-    >
-        Register
-    </Link>
-</p>
 }
