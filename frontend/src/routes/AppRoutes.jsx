@@ -8,20 +8,20 @@ import Products from "../pages/Products";
 import Tickets from "../pages/Tickets";
 import Profile from "../pages/Profile";
 import NotFound from "../pages/NotFound";
+
 import ProtectedRoute from "../components/ProtectedRoute";
 
 export default function AppRoutes() {
     return (
         <Routes>
-
             <Route
-    path="/"
-    element={
-        <ProtectedRoute>
-            <Chat />
-        </ProtectedRoute>
-    }
-/>
+                path="/"
+                element={
+                    <ProtectedRoute>
+                        <Chat />
+                    </ProtectedRoute>
+                }
+            />
 
             <Route
                 path="/login"
@@ -34,46 +34,45 @@ export default function AppRoutes() {
             />
 
             <Route
-    path="/orders"
-    element={
-        <ProtectedRoute>
-            <Orders />
-        </ProtectedRoute>
-    }
-/>
+                path="/orders"
+                element={
+                    <ProtectedRoute>
+                        <Orders />
+                    </ProtectedRoute>
+                }
+            />
 
             <Route
-    path="/products"
-    element={
-        <ProtectedRoute>
-            <Products />
-        </ProtectedRoute>
-    }
-/>
+                path="/products"
+                element={
+                    <ProtectedRoute>
+                        <Products />
+                    </ProtectedRoute>
+                }
+            />
 
             <Route
-    path="/tickets"
-    element={
-        <ProtectedRoute>
-            <Tickets />
-        </ProtectedRoute>
-    }
-/>
+                path="/tickets"
+                element={
+                    <ProtectedRoute>
+                        <Tickets />
+                    </ProtectedRoute>
+                }
+            />
 
             <Route
-    path="/profile"
-    element={
-        <ProtectedRoute>
-            <Profile />
-        </ProtectedRoute>
-    }
-/>
+                path="/profile"
+                element={
+                    <ProtectedRoute>
+                        <Profile />
+                    </ProtectedRoute>
+                }
+            />
 
             <Route
                 path="*"
                 element={<NotFound />}
             />
-
         </Routes>
     );
 }

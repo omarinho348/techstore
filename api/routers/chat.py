@@ -1,33 +1,21 @@
 """
 api/routers/chat.py
-
-Chat API endpoint for the TechStore Agentic AI Assistant.
-
-This router:
-- Receives customer messages through FastAPI.
-- Loads conversation history from MongoDB.
-- Saves user messages.
-- Passes conversation history to the existing triage agent.
-- Saves assistant responses.
-- Returns the agent response.
-- Provides an endpoint for retrieving conversation history.
-
-The agentic AI logic remains in agent_team.py.
-This router is responsible for the API and conversation persistence layer.
 """
 
 from datetime import datetime, timezone
+import json
 
 from agents import Runner
-from fastapi import APIRouter, HTTPException
-from fastapi import Depends
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 
 from api.auth import get_current_customer
+from api.models.conversation import Conversation
 from api.models.customer import Customer
-from agent_team import triage_agent
 from api.models.message_log import MessageLog, MessageRole
 from api.schemas.chat import ChatRequest, ChatResponse
-from api.models.conversation import Conversation
+
+from agent_team import triage_agent
 
 
 router = APIRouter(
@@ -35,11 +23,8 @@ router = APIRouter(
     tags=["Chat"],
 )
 
+
 def generate_title(message: str) -> str:
-    """
-    Generate a short conversation title from the
-    first user message.
-    """
 
     words = message.strip().split()
 
@@ -53,6 +38,109 @@ def generate_title(message: str) -> str:
 
     return title
 
+
+def build_customer_context(
+    customer: Customer,
+) -> str:
+
+    return f"""
+You are TechStore's AI assistant.
+
+Authenticated customer:
+
+Name: {customer.name}
+
+Email: {customer.email}
+
+Customer ID: {customer.id}
+
+IMPORTANT:
+
+If you call get_my_orders,
+always use:
+
+{customer.email}
+
+Never ask the user for their email.
+"""
+
+
+async def load_history(
+    session_id: str,
+):
+
+    return await MessageLog.find(
+        MessageLog.session_id == session_id
+    ).sort(
+        MessageLog.created_at
+    ).to_list()
+
+
+async def update_conversation(
+    session_id: str,
+    first_message: str,
+    previous_messages,
+):
+
+    conversation = await Conversation.find_one(
+        Conversation.session_id == session_id
+    )
+
+    if conversation is None:
+        return
+
+    conversation.updated_at = datetime.now(
+        timezone.utc,
+    )
+
+    if (
+        conversation.title == "New Chat"
+        and len(previous_messages) == 0
+    ):
+        conversation.title = generate_title(
+            first_message,
+        )
+
+    await conversation.save()
+
+
+def build_input_items(
+    previous_messages,
+    customer_context,
+    new_message,
+):
+
+    items = [
+
+        {
+            "role": "system",
+            "content": customer_context,
+        }
+
+    ]
+
+    for message in previous_messages:
+
+        items.append(
+
+            {
+                "role": message.role.value,
+                "content": message.message,
+            }
+
+        )
+
+    items.append(
+
+        {
+            "role": "user",
+            "content": new_message,
+        }
+
+    )
+
+    return items
+
 @router.post(
     "",
     response_model=ChatResponse,
@@ -62,109 +150,29 @@ async def chat(
     current_customer: Customer = Depends(
         get_current_customer,
     ),
-) -> ChatResponse:
-    """
-    Send a customer message to the TechStore agent team.
-
-    Conversation history is loaded from MongoDB using session_id.
-    The new user message and the assistant response are also persisted.
-    """
+):
 
     try:
-        # ================================================================
-        # 1. Load previous conversation history
-        # ================================================================
 
-        previous_messages = await MessageLog.find(
-            MessageLog.session_id == request.session_id
-        ).sort(
-            MessageLog.created_at
-        ).to_list()
-
-        customer_context = f"""
-You are TechStore's AI assistant.
-
-The authenticated customer is:
-
-Name: {current_customer.name}
-
-Email: {current_customer.email}
-
-Customer ID: {current_customer.id}
-
-IMPORTANT
-
-If you call get_my_orders,
-ALWAYS use this email:
-
-{current_customer.email}
-
-Never ask the user for their email.
-"""
-
-        # ================================================================
-        # Update conversation metadata
-        # ================================================================
-
-        conversation = await Conversation.find_one(
-            Conversation.session_id == request.session_id
+        previous_messages = await load_history(
+            request.session_id,
         )
 
-        if conversation is not None:
-
-            conversation.updated_at = datetime.now(timezone.utc)
-
-        if (
-            conversation.title == "New Chat"
-            and len(previous_messages) == 0
-        ):
-            conversation.title = generate_title(
-            request.message
+        await update_conversation(
+            request.session_id,
+            request.message,
+            previous_messages,
         )
 
-        await conversation.save()
-
-        # ================================================================
-        # 2. Build the Agents SDK input from conversation history
-        # ================================================================
-
-        input_items = []
-
-        input_items.append(
-        {
-        "role": MessageRole.SYSTEM.value,
-        "content": customer_context,
-        }
+        customer_context = build_customer_context(
+            current_customer,
         )
 
-        for message in previous_messages:
-            input_items.append(
-        {
-        "role": message.role.value,
-        "content": message.message,
-        }
+        input_items = build_input_items(
+            previous_messages,
+            customer_context,
+            request.message,
         )
-            input_items.append(
-                {
-                    "role": MessageRole.USER.value,
-                    "content": request.message,
-                }
-            )
-
-        # ================================================================
-        # 3. Add the new user message to the agent input
-        # ================================================================
-
-        input_items.append(
-            {
-                "role": MessageRole.USER.value,
-                "content": request.message,
-            }
-        )
-
-        # ================================================================
-        # 4. Save the new user message to MongoDB
-        # ================================================================
 
         user_message = MessageLog(
             session_id=request.session_id,
@@ -174,30 +182,21 @@ Never ask the user for their email.
 
         await user_message.insert()
 
-        # ================================================================
-        # 5. Run the existing TechStore agent team
-        # ================================================================
-
         result = await Runner.run(
-    triage_agent,
-    input=input_items,
-)
-
-        # ================================================================
-        # 6. Make sure the agent produced a response
-        # ================================================================
+            triage_agent,
+            input=input_items,
+        )
 
         if result.final_output is None:
+
             raise HTTPException(
                 status_code=500,
                 detail="The agent did not generate a response.",
             )
 
-        assistant_response = str(result.final_output)
-
-        # ================================================================
-        # 7. Save the assistant response to MongoDB
-        # ================================================================
+        assistant_response = str(
+            result.final_output,
+        )
 
         assistant_message = MessageLog(
             session_id=request.session_id,
@@ -207,10 +206,6 @@ Never ask the user for their email.
 
         await assistant_message.insert()
 
-        # ================================================================
-        # 8. Return the API response
-        # ================================================================
-
         return ChatResponse(
             session_id=request.session_id,
             response=assistant_response,
@@ -218,16 +213,229 @@ Never ask the user for their email.
         )
 
     except HTTPException:
+
         raise
 
     except Exception as error:
-        print(f"Chat processing error: {error}")
+
+        print(
+            "Chat processing error:",
+            error,
+        )
 
         raise HTTPException(
             status_code=500,
-            detail="An error occurred while processing your message.",
-        ) from error
+            detail="Chat processing failed.",
+        )
 
+@router.post(
+    "/stream",
+)
+async def stream_chat(
+    request: ChatRequest,
+    current_customer: Customer = Depends(
+        get_current_customer,
+    ),
+):
+
+    async def event_generator():
+
+        previous_messages = await load_history(
+            request.session_id,
+        )
+
+        await update_conversation(
+            request.session_id,
+            request.message,
+            previous_messages,
+        )
+
+        customer_context = build_customer_context(
+            current_customer,
+        )
+
+        input_items = build_input_items(
+            previous_messages,
+            customer_context,
+            request.message,
+        )
+
+        user_message = MessageLog(
+            session_id=request.session_id,
+            role=MessageRole.USER,
+            message=request.message,
+        )
+
+        await user_message.insert()
+
+        result = Runner.run_streamed(
+            triage_agent,
+            input=input_items,
+        )
+
+        assistant_response = ""
+
+        async for event in result.stream_events():
+
+            event_name = type(event).__name__
+
+            # ==========================================================
+            # Agent changed
+            # ==========================================================
+
+            if event_name == "AgentUpdatedStreamEvent":
+
+                yield (
+                    "event: agent\n"
+                    f"data: {json.dumps({'name': event.new_agent.name})}\n\n"
+                )
+
+            # ==========================================================
+            # Tool calls / handoffs
+            # ==========================================================
+
+            elif event_name == "RunItemStreamEvent":
+
+                item = event.item
+
+                if hasattr(item, "raw_item"):
+
+                    raw_item = item.raw_item
+
+                    if hasattr(raw_item, "name"):
+
+                        tool = raw_item.name
+
+                        friendly = {
+
+                            "transfer_to_order_and_product_agent":
+                                "Routing to Order & Product Agent...",
+
+                            "transfer_to_knowledge_agent":
+                                "Routing to Knowledge Agent...",
+
+                            "transfer_to_support_agent":
+                                "Routing to Support Agent...",
+
+                            "check_order_status":
+                                "Checking your order...",
+
+                            "get_my_orders":
+                                "Retrieving your orders...",
+
+                            "search_products":
+                                "Searching products...",
+
+                            "cancel_order":
+                                "Cancelling your order...",
+
+                            "check_refund_eligibility":
+                                "Checking refund eligibility...",
+
+                            "ticket_inquiry":
+                                "Looking up your support ticket...",
+
+                            "send_support_email":
+                                "Sending support email...",
+
+                            "search_knowledge_base":
+                                "Searching our knowledge base...",
+
+                        }.get(tool)
+
+                        if friendly:
+
+                            yield (
+                                "event: status\n"
+                                f"data: {json.dumps({'text': friendly})}\n\n"
+                            )
+
+            # ==========================================================
+            # OpenAI streaming events
+            # ==========================================================
+
+            elif event_name == "RawResponsesStreamEvent":
+
+                raw = event.data
+
+                raw_name = type(raw).__name__
+
+                # ------------------------------------------------------
+                # Text token
+                # ------------------------------------------------------
+
+                if raw_name == "ResponseTextDeltaEvent":
+
+                    assistant_response += raw.delta
+
+                    yield (
+                        "event: token\n"
+                        f"data: {json.dumps({'text': raw.delta})}\n\n"
+                    )
+
+                # ------------------------------------------------------
+                # Finished
+                # ------------------------------------------------------
+
+                elif raw_name == "ResponseCompletedEvent":
+
+                    pass
+
+        while not result.is_complete:
+
+            await result.run_loop_task
+
+        if not assistant_response and result.final_output is not None:
+
+            assistant_response = str(
+                result.final_output,
+            )
+
+        assistant_message = MessageLog(
+            session_id=request.session_id,
+            role=MessageRole.ASSISTANT,
+            message=assistant_response,
+        )
+
+        await assistant_message.insert()
+
+        yield (
+            "event: done\n"
+            "data: {}\n\n"
+        )
+
+        while not result.is_complete:
+
+            await result.run_loop_task
+
+        if result.final_output is not None:
+
+            assistant_response = str(
+                result.final_output,
+            )
+
+            assistant_message = MessageLog(
+                session_id=request.session_id,
+                role=MessageRole.ASSISTANT,
+                message=assistant_response,
+            )
+
+            await assistant_message.insert()
+
+            yield (
+                f"event: final\n"
+                f"data: {json.dumps({'response': assistant_response})}\n\n"
+            )
+
+        yield (
+            "event: done\n"
+            "data: {}\n\n"
+        )
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+    )
 
 @router.get(
     "/{session_id}",

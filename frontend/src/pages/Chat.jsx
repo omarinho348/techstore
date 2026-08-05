@@ -55,40 +55,138 @@ export default function Chat() {
 
     async function handleSend(message) {
 
-        if (!currentSessionId)
-            return;
+    if (!currentSessionId)
+        return;
 
-        setMessages((previous) => [
+    // ==========================================================
+    // Add user message
+    // ==========================================================
 
-            ...previous,
+    setMessages((previous) => [
 
-            {
-                role: "user",
-                message,
+        ...previous,
+
+        {
+            role: "user",
+            message,
+        },
+
+        {
+            role: "assistant",
+            message: "",
+            status: "Thinking...",
+            agent: "",
+        },
+
+    ]);
+
+    await loadConversations();
+
+    await chatService.sendMessage(
+
+        currentSessionId,
+
+        message,
+
+        {
+
+            // --------------------------------------------------
+
+            agent: ({ name }) => {
+
+                setMessages((previous) => {
+
+                    const updated = [...previous];
+
+                    updated[updated.length - 1] = {
+
+                        ...updated[updated.length - 1],
+
+                        agent: name,
+
+                    };
+
+                    return updated;
+
+                });
+
             },
 
-        ]);
+            // --------------------------------------------------
 
-        const response =
-            await chatService.sendMessage(
-                currentSessionId,
-                message,
-            );
+            status: ({ text }) => {
 
-        await loadConversations();    
+                setMessages((previous) => {
 
-        setMessages((previous) => [
+                    const updated = [...previous];
 
-            ...previous,
+                    updated[updated.length - 1] = {
 
-            {
-                role: "assistant",
-                message: response.response,
+                        ...updated[updated.length - 1],
+
+                        status: text,
+
+                    };
+
+                    return updated;
+
+                });
+
             },
 
-        ]);
+            // --------------------------------------------------
 
-    }
+            token: ({ text }) => {
+
+                setMessages((previous) => {
+
+                    const updated = [...previous];
+
+                    updated[updated.length - 1] = {
+
+                        ...updated[updated.length - 1],
+
+                        message:
+
+                            updated[
+                                updated.length - 1
+                            ].message + text,
+
+                    };
+
+                    return updated;
+
+                });
+
+            },
+
+            // --------------------------------------------------
+
+            done: () => {
+
+                setMessages((previous) => {
+
+                    const updated = [...previous];
+
+                    updated[updated.length - 1] = {
+
+                        ...updated[updated.length - 1],
+
+                        status: "",
+
+                    };
+
+                    return updated;
+
+                });
+
+            },
+
+        },
+
+    );
+
+}
 
     return (
 

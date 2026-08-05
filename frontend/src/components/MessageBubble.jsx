@@ -1,6 +1,11 @@
 import ReactMarkdown from "react-markdown";
 
-export default function MessageBubble({ role, message }) {
+export default function MessageBubble({
+    role,
+    message,
+    status,
+    agent,
+}) {
 
     const isUser = role === "user";
 
@@ -8,7 +13,9 @@ export default function MessageBubble({ role, message }) {
 
         <div
             className={`mb-6 flex ${
-                isUser ? "justify-end" : "justify-start"
+                isUser
+                    ? "justify-end"
+                    : "justify-start"
             }`}
         >
 
@@ -19,6 +26,50 @@ export default function MessageBubble({ role, message }) {
                         : "bg-neutral-800"
                 }`}
             >
+
+                {
+
+                    !isUser &&
+                    agent && (
+
+                        <div
+                            className="
+                                mb-2
+                                text-xs
+                                font-semibold
+                                text-blue-400
+                            "
+                        >
+
+                            🤖 {agent}
+
+                        </div>
+
+                    )
+
+                }
+
+                {
+
+                    !isUser &&
+                    status && (
+
+                        <div
+                            className="
+                                mb-2
+                                text-sm
+                                italic
+                                text-neutral-400
+                            "
+                        >
+
+                            {status}
+
+                        </div>
+
+                    )
+
+                }
 
                 <ReactMarkdown>
 

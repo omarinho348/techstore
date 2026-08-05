@@ -9,14 +9,12 @@ export default function ChatWindow({ messages }) {
             {messages.map((message, index) => (
 
                 <MessageBubble
-
-                    key={index}
-
-                    role={message.role}
-
-                    message={message.message}
-
-                />
+    key={index}
+    role={message.role}
+    message={message.message}
+    status={message.status}
+    agent={message.agent}
+/>
 
             ))}
 
