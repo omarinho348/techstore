@@ -3,6 +3,7 @@
 An AI-powered customer support platform for a fictional electronics store, built with a **React frontend**, **FastAPI backend**, **MongoDB**, and an **agentic AI architecture**.
 
 The system combines specialized AI agents, tool calling, RAG, MongoDB data, and voice input to provide an end-to-end customer support experience.
+The system combines specialized AI agents, tool calling, RAG, MongoDB data, and voice input to provide an end-to-end customer support experience.
 
 ---
 
@@ -319,8 +320,24 @@ The transcription is performed locally rather than requiring a separate cloud tr
 ## Project Structure
 
 ```text
+```text
 techstore/
 │
+├── api/
+│   ├── app.py
+│   ├── database.py
+│   ├── models/
+│   ├── schemas/
+│   └── routers/
+│
+├── frontend/
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   └── ...
+│
+├── knowledge_base/
+│   ├── faq.txt
 ├── api/
 │   ├── app.py
 │   ├── database.py
@@ -349,7 +366,71 @@ techstore/
 ├── test_files/
 │
 ├── .env
+│   └── warranty.txt
+│
+├── agent_team.py
+├── tools.py
+├── rag.py
+├── schemas.py
+│
+├── test_files/
+│
+├── .env
 ├── .gitignore
+├── pyproject.toml
+├── uv.lock
+└── README.md
+```
+
+---
+
+## Technology Stack
+
+### Frontend
+
+- React
+- JavaScript / JSX
+- CSS
+- Fetch/API communication
+
+### Backend
+
+- Python 3.12+
+- FastAPI
+- Uvicorn
+- Pydantic
+
+### Database
+
+- MongoDB Atlas
+- Beanie
+- Motor
+
+### AI
+
+- OpenAI Agents SDK
+- OpenAI models
+- Function tools
+- Agent handoffs
+- OpenAI embeddings
+
+### RAG
+
+- ChromaDB
+- `text-embedding-3-small`
+
+### Voice
+
+- faster-whisper
+
+### External Services
+
+- Resend
+
+### Development
+
+- `uv`
+- Git / GitHub
 ├── pyproject.toml
 ├── uv.lock
 └── README.md
@@ -419,14 +500,56 @@ cd techstore
 ### 2. Install backend dependencies
 
 Using `uv`:
+### 1. Clone the repository
 
 ```bash
+git clone https://github.com/omarinho348/techstore.git
+cd techstore
+```
+
+### 2. Install backend dependencies
+
+Using `uv`:
+
+```bash
+uv sync
 uv sync
 ```
 
 Or create a virtual environment manually:
+Or create a virtual environment manually:
 
 ```bash
+python -m venv .venv
+```
+
+Activate it:
+
+**Windows**
+
+```powershell
+.venv\Scripts\activate
+```
+
+**Linux / macOS / WSL**
+
+```bash
+source .venv/bin/activate
+```
+
+### 3. Install frontend dependencies
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+---
+
+## Environment Variables
+
+Create a `.env` file for the backend:
 python -m venv .venv
 ```
 
@@ -498,8 +621,55 @@ http://127.0.0.1:8000/docs
 ### Start the React Frontend
 
 In another terminal:
+```env
+OPENAI_API_KEY=your_openai_api_key
+MONGODB_URI=your_mongodb_connection_string
+DATABASE_NAME=your_database_name
+
+RESEND_API_KEY=your_resend_api_key
+SUPPORT_TEAM_EMAIL=your_support_email
+```
+
+The exact environment variable names should match the project's configuration.
+
+> Never commit `.env` or API keys to GitHub.
+
+---
+
+## Running the Application
+
+### Start the FastAPI Backend
+
+From the project root:
 
 ```bash
+uv run uvicorn api.app:app --reload
+```
+
+The API will normally be available at:
+
+```text
+http://127.0.0.1:8000
+```
+
+Interactive API documentation:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+### Start the React Frontend
+
+In another terminal:
+
+```bash
+cd frontend
+npm run dev
+```
+
+The frontend will display its local development URL in the terminal.
+
+Both applications must be running for the complete system to work.
 cd frontend
 npm run dev
 ```
@@ -624,8 +794,196 @@ The repository contains tests for different parts of the system, including:
 - API/backend functionality
 
 Backend tests can be run from the project environment using the project's configured test scripts/framework.
+## Example Requests
+
+### Check Order Status
+
+```text
+Where is my order?
+```
+
+The request flows through:
+
+```text
+React
+  ↓
+FastAPI
+  ↓
+Triage Agent
+  ↓
+Order & Product Agent
+  ↓
+check_order_status()
+  ↓
+MongoDB
+  ↓
+Response
+```
+
+### Product Search
+
+```text
+Do you have any laptops available?
+```
+
+```text
+React
+  ↓
+FastAPI
+  ↓
+Order & Product Agent
+  ↓
+search_products()
+  ↓
+MongoDB
+```
+
+### Knowledge Question
+
+```text
+What is your warranty policy?
+```
+
+```text
+React
+  ↓
+FastAPI
+  ↓
+Knowledge Agent
+  ↓
+RAG
+  ↓
+ChromaDB
+  ↓
+Response
+```
+
+### Multi-Intent Request
+
+```text
+What is your return policy, and can I cancel my order?
+```
+
+The Triage Agent can route the different parts of the request to the appropriate tools/agents and combine the results.
 
 ---
+
+## Authentication & Conversations
+
+The FastAPI backend manages authenticated customers and their conversations.
+
+A typical chat flow is:
+
+```text
+Login
+  ↓
+Authenticated Customer
+  ↓
+Create/Select Conversation
+  ↓
+POST /stream
+  ↓
+Verify Conversation Ownership
+  ↓
+Agent Workflow
+  ↓
+Stream Response
+  ↓
+Store Conversation Messages
+```
+
+Conversation ownership is checked by the backend so customers cannot access another customer's conversation.
+
+---
+
+## Testing
+
+The repository contains tests for different parts of the system, including:
+
+- Business rules
+- Agent behavior
+- RAG
+- Conversations
+- Email escalation
+- API/backend functionality
+
+Backend tests can be run from the project environment using the project's configured test scripts/framework.
+
+---
+
+## Key Design Principles
+
+### 1. Specialized Agents
+
+Different responsibilities are separated into focused agents.
+
+### 2. Tool-Based Actions
+
+The model uses tools for real business operations instead of inventing database results.
+
+### 3. Business Logic Outside the LLM
+
+Critical rules are enforced by backend code.
+
+### 4. Persistent Database
+
+MongoDB provides persistent storage for customers, products, orders, tickets, and conversations.
+
+### 5. RAG Grounding
+
+Company-specific information is retrieved from the TechStore knowledge base.
+
+### 6. API Separation
+
+The React frontend communicates with FastAPI through APIs instead of directly accessing the database or AI layer.
+
+### 7. Streaming
+
+The backend can stream AI responses to the React frontend for a more responsive chat experience.
+
+---
+
+## Future Improvements
+
+- Improve authentication and authorization
+- Add production-grade database indexing
+- Add more advanced RAG retrieval/reranking
+- Add agent tracing and observability
+- Add automated agent evaluation
+- Add stronger frontend error handling
+- Add deployment configuration
+- Add CI/CD
+- Add production monitoring
+
+---
+
+## Project Status
+
+Current architecture includes:
+
+- [x] React frontend
+- [x] FastAPI backend
+- [x] MongoDB database
+- [x] Beanie/Motor database integration
+- [x] Customer authentication
+- [x] Conversation management
+- [x] Streaming chat endpoint
+- [x] Multi-agent AI architecture
+- [x] Agent handoffs
+- [x] Business tools
+- [x] RAG knowledge base
+- [x] ChromaDB
+- [x] Voice transcription
+- [x] Resend support escalation
+- [x] Backend/API separation
+
+---
+
+## License
+
+No license file is currently included in the repository.
+
+If this project is distributed publicly, add an appropriate `LICENSE` file.
 
 ## Key Design Principles
 

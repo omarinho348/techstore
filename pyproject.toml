@@ -5,11 +5,22 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "bcrypt<4.1",
+    "beanie<2",
     "chromadb>=1.5.9",
+    "email-validator>=2.3.0",
+    "fastapi>=0.139.0",
     "faster-whisper>=1.2.1",
     "gradio>=6.20.0",
+    "motor<4",
     "openai>=2.44.0",
     "openai-agents>=0.18.1",
+    "passlib[bcrypt]>=1.7.4",
+    "pydantic>=2.13.4",
     "python-dotenv>=1.2.2",
+    "pillow>=10.0.0",
+    "pytesseract>=0.3.10",
+    "python-jose[cryptography]>=3.5.0",
     "resend>=2.32.2",
+    "uvicorn>=0.51.0",
 ]
