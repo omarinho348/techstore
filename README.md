@@ -1,197 +1,645 @@
-# TechStore AI Customer Support Assistant
+[README.md](https://github.com/user-attachments/files/30874137/README.md)
+# TechStore AI Customer Support
 
-A tool-calling AI customer support assistant for a fictional electronics
-retailer, TechStore. Built with the OpenAI Python SDK (Structured
-Outputs / strict function calling), Gradio, python-dotenv, Resend, and
-Chroma (for retrieval-augmented generation).
+An AI-powered customer support assistant for a fictional electronics store, built with a **multi-agent architecture**, **RAG**, **tool calling**, and **voice input**.
 
-The assistant can check order status, search products, cancel eligible
-orders, check refund eligibility, look up support tickets, escalate
-unresolved issues to a human support team via email, and answer
-open-ended policy/FAQ questions (return policy, warranty, shipping,
-store info) using a small RAG pipeline over a local knowledge base.
+The system uses a Triage Agent to route customer requests to specialized agents for orders/products, support, and company knowledge.
 
 ---
 
 ## Features
 
-- **Seven tools**, six backed by structured (in-memory, fake) data and
-  one backed by retrieval over a document knowledge base:
-  - `check_order_status(order_id)`
-  - `search_products(keyword)` — case-insensitive, partial, plural-tolerant
-  - `cancel_order(order_id)` — enforces cancellation business rules
-  - `check_refund_eligibility(order_id)`
-  - `ticket_inquiry(ticket_id)`
-  - `send_support_email(customer_email, issue)` — last-resort escalation only
-  - `search_knowledge_base(query)` — RAG over policy/FAQ documents (return
-    policy, warranty, shipping, store info, general FAQ)
-- **Structured Outputs** (`strict: true`) on every tool schema, guaranteeing
-  well-formed tool call arguments.
-- A system prompt that enforces: always use tools for facts, never invent
-  data, route policy questions to the knowledge base and record lookups to
-  the matching backend tool (a single question can trigger both), and only
-  escalate via email when nothing else can resolve the issue.
-- A **RAG pipeline** (`rag.py`): documents are chunked, embedded with
-  OpenAI (`text-embedding-3-small`), stored in a local persistent Chroma
-  collection, and retrieved by a calibrated similarity-distance threshold
-  — so genuinely irrelevant questions correctly come back empty instead
-  of being answered from an unrelated policy chunk.
-- A Gradio chat UI (`ChatInterface`) with a dark custom theme, streaming
-  "typing" responses, custom avatars, and example prompts.
+- 🤖 Multi-agent customer support
+- 🔀 Intelligent agent handoffs
+- 🛒 Product and order management
+- 📦 Order status lookup
+- ❌ Order cancellation with business-rule validation
+- 💰 Refund eligibility checking
+- 🎫 Support ticket lookup
+- 📧 Human support escalation through Resend
+- 📚 RAG-based FAQ and policy answers
+- 🔎 ChromaDB vector search
+- 🎙️ Local voice transcription with faster-whisper
+- 💬 Gradio chat interface
+- ⚡ Streaming-style responses
+- 🧪 Dedicated testing scripts
+
+---
+
+## Architecture
+
+```mermaid
+flowchart TD
+    A[Customer] --> B[Gradio UI]
+
+    B -->|Text| C[Triage Agent]
+    B -->|Voice| V[faster-whisper]
+    V --> C
+
+    C --> D[Order & Product Agent]
+    C --> E[Support Agent]
+    C --> F[Knowledge Agent]
+
+    D --> G[Business Tools]
+    E --> G
+    F --> H[RAG Search]
+
+    G --> I[fake_database.json]
+    E --> J[Resend]
+    H --> K[ChromaDB]
+
+    D --> L[Customer Response]
+    E --> L
+    F --> L
+
+    L --> B
+```
+
+### Request Flow
+
+```text
+Customer
+   ↓
+Gradio UI
+   ↓
+Triage Agent
+   ↓
+┌────────────────────┬─────────────────┬─────────────────┐
+│                    │                 │
+▼                    ▼                 ▼
+Order & Product   Support Agent   Knowledge Agent
+Agent
+│                    │                 │
+▼                    ▼                 ▼
+Business Tools     Resend            RAG
+│                                      │
+▼                                      ▼
+Mock Database                         ChromaDB
+```
+
+---
+
+## Agents
+
+### Triage Agent
+
+The main coordinator.
+
+It identifies the customer's intent and routes the request to the appropriate specialist. It can handle requests containing multiple intents and ensures the required tasks are completed before producing the final response.
+
+### Order & Product Agent
+
+Handles:
+
+- Order status
+- Product search
+- Order cancellation
+- Refund eligibility
+
+It relies on tools instead of guessing business information.
+
+### Support Agent
+
+Handles:
+
+- Support ticket inquiries
+- Human support escalation
+
+When escalation is requested, it uses the email tool to contact the support team.
+
+### Knowledge Agent
+
+Handles:
+
+- Return policy
+- Warranty
+- Shipping
+- Store information
+- FAQs
+
+It uses the RAG knowledge base instead of relying only on the model's knowledge.
+
+---
+
+## Tools
+
+The project contains seven main business tools:
+
+| Tool | Purpose |
+|---|---|
+| `check_order_status` | Check order status, payment, and total |
+| `search_products` | Search products by name/category |
+| `cancel_order` | Cancel eligible orders |
+| `check_refund_eligibility` | Check refund eligibility |
+| `ticket_inquiry` | Look up support tickets |
+| `send_support_email` | Escalate issues to human support |
+| `search_knowledge_base` | Search company policies and FAQs |
+
+Important business rules are enforced inside the tools.
+
+For example:
+
+```text
+Processing → Can be cancelled
+Shipped    → Cannot be cancelled
+Delivered  → Cannot be cancelled
+Cancelled  → Cannot be cancelled again
+```
+
+This prevents the model from bypassing the application's business logic.
+
+---
+
+## RAG Knowledge Base
+
+The Knowledge Agent uses Retrieval-Augmented Generation with **ChromaDB** and **OpenAI embeddings**.
+
+```text
+knowledge_base/*.txt
+        ↓
+Document loading
+        ↓
+Paragraph chunks
+        ↓
+OpenAI embeddings
+        ↓
+ChromaDB
+        ↓
+User question
+        ↓
+Similarity search
+        ↓
+Relevant chunks
+        ↓
+Knowledge Agent
+```
+
+Current knowledge-base files:
+
+```text
+knowledge_base/
+├── faq.txt
+├── return_policy.txt
+├── shipping_policy.txt
+├── store_information.txt
+└── warranty.txt
+```
+
+A relevance threshold is applied so unrelated questions do not automatically receive an irrelevant document.
+
+To rebuild the vector store after changing the knowledge base, remove:
+
+```text
+chroma_store/
+```
+
+and restart the application.
+
+---
+
+## Voice Input
+
+Voice messages are transcribed locally using **faster-whisper**.
+
+```text
+Microphone
+    ↓
+Gradio Audio
+    ↓
+faster-whisper
+    ↓
+Transcribed Text
+    ↓
+Normal Agent Workflow
+```
+
+The current configuration uses the Whisper `base` model with CPU/int8 processing.
 
 ---
 
 ## Project Structure
 
-```
+```text
 techstore/
 │
-├── main.py                # Orchestration: OpenAI client, system prompt,
-│                           # tool-calling loop, Gradio app + UI styling
-├── tools.py                # Business logic: the seven tool functions
-├── schemas.py               # OpenAI tool schemas (Structured Outputs)
-├── rag.py                   # RAG pipeline: chunking, embeddings, Chroma
-│                             # storage, calibrated-threshold retrieval
-├── fake_database.json       # In-memory mock data (orders, products, tickets)
-├── knowledge_base/           # Plain-text policy/FAQ source documents
-│   ├── return_policy.txt
-│   ├── warranty.txt
-│   ├── shipping_policy.txt
-│   ├── store_information.txt
-│   └── faq.txt
-├── chroma_store/              # Generated: persisted vector store
-│                               # (git-ignored, rebuilt from knowledge_base/)
-├── assets/                    # Generated chat UI avatar images
-│   ├── user_avatar.png
-│   └── bot_avatar.png
-├── .env                      # API keys (NOT committed to version control)
+├── main.py
+│   └── Application entry point and Gradio UI
+│
+├── agent_team.py
+│   └── Triage and specialist agents
+│
+├── tools.py
+│   └── Business tools and logic
+│
+├── rag.py
+│   └── RAG ingestion and retrieval
+│
+├── schemas.py
+│   └── Tool schemas
+│
+├── ui_config.py
+│   └── UI styling/configuration
+│
+├── fake_database.json
+│   └── Mock orders, products, and tickets
+│
+├── knowledge_base/
+│   └── Store policies and FAQs
+│
+├── assets/
+│   └── UI images/avatars
+│
+├── test_files/
+│   └── Project tests
+│
+├── pyproject.toml
+├── uv.lock
 ├── .gitignore
-├── README.md
-└── pyproject.toml
+└── README.md
 ```
-
-Your knowledge base filenames may differ from the list above if you're
-using your own mentor-provided documents — `rag.py` loads whatever
-`.txt` files are present in `knowledge_base/`, no hardcoded filenames.
 
 ---
 
-## Setup
+## Tech Stack
 
-### 1. Clone and create a virtual environment
+### AI & Agents
+
+- Python 3.12+
+- OpenAI Agents SDK
+- OpenAI model: `gpt-5.4-mini`
+- OpenAI embeddings: `text-embedding-3-small`
+- Function tools
+- Agent handoffs
+
+### RAG
+
+- ChromaDB
+- OpenAI Embeddings
+- Persistent local vector store
+
+### UI
+
+- Gradio
+- Custom CSS
+- Responsive chat interface
+
+### Voice
+
+- faster-whisper
+- Local CPU transcription
+
+### External Services
+
+- Resend
+
+### Development
+
+- `uv`
+- Python
+- JSON
+- Logging
+- Test scripts
+
+---
+
+## Installation
+
+### 1. Clone the repository
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate      # on Windows: .venv\Scripts\activate
+git clone https://github.com/omarinho348/techstore.git
+cd techstore
 ```
 
 ### 2. Install dependencies
+
+Using `uv`:
+
+```bash
+uv sync
+```
+
+Or with a standard virtual environment:
+
+```bash
+python -m venv .venv
+```
+
+Activate it:
+
+**Windows**
+
+```powershell
+.venv\Scripts\activate
+```
+
+**Linux / macOS / WSL**
+
+```bash
+source .venv/bin/activate
+```
+
+Then:
 
 ```bash
 pip install -e .
 ```
 
-(or manually: `pip install openai gradio python-dotenv resend chromadb`)
+---
 
-### 3. Configure environment variables
+## Environment Variables
 
-Edit `.env` and fill in your real keys:
+Create a `.env` file in the project root:
 
+```env
+OPENAI_API_KEY=your_openai_api_key
+RESEND_API_KEY=your_resend_api_key
+SUPPORT_TEAM_EMAIL=your_support_email
 ```
-OPENAI_API_KEY=your-openai-key-here
-RESEND_API_KEY=your-resend-key-here
-SUPPORT_TEAM_EMAIL=your-resend-signup-email@example.com
+
+`OPENAI_API_KEY` is required.
+
+The Resend variables are required for email escalation.
+
+> Never commit your `.env` file or API keys to GitHub.
+
+---
+
+## Running the Application
+
+With `uv`:
+
+```bash
+uv run python main.py
 ```
 
-- Get an OpenAI key from https://platform.openai.com/api-keys
-- Get a Resend key from https://resend.com/api-keys
-- `SUPPORT_TEAM_EMAIL` must match the email address you signed up to
-  Resend with — the sandbox sender (`onboarding@resend.dev`) can only
-  deliver to that address until you verify your own domain.
-
-**Never commit `.env`.** It's already listed in `.gitignore`.
-
-### 4. Confirm your OpenAI model access
-
-Your OpenAI project may not have access to every model. Check
-`main.py`'s `OPENAI_MODEL` constant and update it to a model your key
-can use if you hit a `403 model_not_found` error.
-
-### 5. Build the knowledge base (first run only)
-
-The first time you run the app (or `search_knowledge_base` is called),
-`rag.py` embeds every chunk in `knowledge_base/*.txt` via the OpenAI
-embeddings API and stores them in a local `chroma_store/` folder. This
-costs a small number of embedding API calls, but only happens once —
-subsequent runs detect the existing collection and skip re-embedding.
-
-If you edit or add files in `knowledge_base/`, delete `chroma_store/`
-first to force a fresh embed; otherwise the app keeps serving the old,
-now-stale data.
-
-### 6. Run the app
+Or:
 
 ```bash
 python main.py
 ```
 
-This opens the Gradio chat UI in your browser (typically at
-`http://127.0.0.1:7860`).
+Gradio will provide the local application URL, normally:
+
+```text
+http://127.0.0.1:7860
+```
 
 ---
 
-## Business Rules
+## Testing
 
-- **Order cancellation:** only `Processing` orders can be cancelled.
-  `Shipped`, `Delivered`, and already-`Cancelled` orders are rejected
-  with a clear explanation.
-- **Email escalation:** the assistant is instructed (both in its system
-  prompt and in the `send_support_email` tool description) to use this
-  only as a last resort, after the other six tools have failed to
-  resolve the issue.
-- **Knowledge base vs. backend routing:** the system prompt tells the
-  model to use `search_knowledge_base` for open-ended policy/FAQ
-  questions not tied to a specific record, and the matching backend
-  tool when a question references a specific order/product/ticket ID.
-  A single question can trigger both in the same turn (e.g., "what's
-  your return policy, and is order 1003 eligible for a refund?").
-- **Relevance threshold:** `search_knowledge_base` only returns chunks
-  within a calibrated similarity-distance cutoff (`MAX_RELEVANT_DISTANCE`
-  in `rag.py`). Genuinely unrelated questions correctly come back empty
-  (`found: false`) rather than being answered from a mismatched chunk.
+The repository contains tests for the main components:
 
----
+```text
+test_files/
+├── test_business_rules.py
+├── test_conversation.py
+├── test_email.py
+├── test_knowledge_agent.py
+├── test_rag.py
+├── test_rag_integration.py
+└── test_triage.py
+```
 
-## Sample Data
+Examples:
 
-`fake_database.json` includes:
+```bash
+uv run python test_files/test_business_rules.py
+```
 
-- **4 orders** (`1001`–`1004`) covering each status: Processing, Shipped,
-  Delivered, Cancelled.
-- **5 products** across Laptop, Phone, and Accessories categories.
-- **2 support tickets** (`T-5001`, `T-5002`).
+```bash
+uv run python test_files/test_rag.py
+```
 
-Feel free to edit this file directly to add more test data — no code
-changes required, since `tools.py` loads it dynamically at startup.
+```bash
+uv run python test_files/test_triage.py
+```
 
-`knowledge_base/` contains short plain-text policy/FAQ documents (return
-policy, warranty, shipping, store information, and general FAQ). Each
-document is chunked on blank lines, so keep related content in
-paragraph form for the chunking to stay meaningful — see `rag.py`'s
-`chunk_text()`.
+Some tests require valid API credentials.
 
 ---
 
-## Notes
+## Example Requests
 
-- This version uses an **in-memory fake database** (a JSON file loaded
-  once at startup). A real database (PostgreSQL + SQLAlchemy) is planned
-  for a later iteration — the tool functions are written so that
-  swapping the data layer won't change how the model calls them.
-- Order mutations (e.g., a successful cancellation) persist only for the
-  lifetime of the running process — restarting the app reloads
-  `fake_database.json` fresh from disk.
-- The RAG pipeline uses Chroma and the OpenAI embeddings API directly,
-  rather than a higher-level library like EmbedChain — for a knowledge
-  base this small, direct calls keep the pipeline transparent and easy
-  to debug (see `rag.py`) without adding an abstraction layer.
+### Order Status
+
+```text
+Where is order 1002?
+```
+
+```text
+Triage Agent
+    ↓
+Order & Product Agent
+    ↓
+check_order_status()
+    ↓
+Response
+```
+
+### Product Search
+
+```text
+Do you have any phones?
+```
+
+The Order & Product Agent calls:
+
+```text
+search_products()
+```
+
+### Cancellation
+
+```text
+Please cancel order 1001.
+```
+
+The agent calls:
+
+```text
+cancel_order()
+```
+
+The tool determines whether the order is eligible for cancellation.
+
+### Knowledge Question
+
+```text
+What is your warranty policy?
+```
+
+```text
+Triage Agent
+    ↓
+Knowledge Agent
+    ↓
+search_knowledge_base()
+    ↓
+ChromaDB
+    ↓
+Relevant policy
+```
+
+### Human Escalation
+
+```text
+I need a human to help me. My email is customer@example.com.
+```
+
+The Support Agent uses:
+
+```text
+send_support_email()
+```
+
+to contact the support team through Resend.
+
+---
+
+## Multi-Intent Example
+
+The system can handle multiple requests in one message:
+
+```text
+What is your warranty policy, and is order 1003 eligible
+for a refund?
+```
+
+The Triage Agent can route the two tasks separately:
+
+```text
+Warranty question
+      ↓
+Knowledge Agent
+
+Refund question
+      ↓
+Order & Product Agent
+```
+
+The final response combines the results for the customer.
+
+---
+
+## Data
+
+The project currently uses:
+
+```text
+fake_database.json
+```
+
+as a mock database containing:
+
+- Orders
+- Products
+- Support tickets
+
+This is intended for development and demonstration.
+
+Order changes are currently held in memory and are not persisted back to the JSON file.
+
+---
+
+## Adding Knowledge
+
+To add another policy or FAQ:
+
+1. Create a `.txt` file inside `knowledge_base/`
+2. Add the relevant information
+3. Delete `chroma_store/`
+4. Restart the application
+
+Example:
+
+```text
+knowledge_base/
+├── faq.txt
+├── return_policy.txt
+├── shipping_policy.txt
+├── store_information.txt
+├── warranty.txt
+└── payment_policy.txt
+```
+
+The RAG ingestion process automatically discovers `.txt` files in the directory.
+
+---
+
+## Key Design Principles
+
+### Specialized Agents
+
+Each agent has a focused responsibility instead of putting every task into one large prompt.
+
+### Tool-Based Actions
+
+Business operations are performed through Python tools rather than allowing the model to invent results.
+
+### Business Rules Outside the LLM
+
+Important constraints such as order cancellation eligibility are enforced by the application.
+
+### RAG Grounding
+
+Company-specific information comes from the TechStore knowledge base.
+
+### Separation of Concerns
+
+```text
+UI
+ ↓
+Agents
+ ↓
+Tools
+ ↓
+Data / RAG / External Services
+```
+
+This makes the project easier to test, maintain, and extend.
+
+---
+
+## Future Improvements
+
+Possible next steps include:
+
+- Replace the JSON mock database with PostgreSQL
+- Add authentication and authorization
+- Persist order changes
+- Add customer accounts
+- Improve RAG chunking and retrieval
+- Add hybrid search and reranking
+- Add agent tracing and observability
+- Add automated evaluation for agent responses
+- Improve voice transcription performance
+- Deploy the application to a production environment
+
+---
+
+## Project Status
+
+The current implementation includes:
+
+- [x] Multi-agent architecture
+- [x] Triage and specialist agents
+- [x] Agent handoffs
+- [x] Business tools
+- [x] Order/product operations
+- [x] Support tickets
+- [x] Email escalation
+- [x] RAG knowledge base
+- [x] ChromaDB
+- [x] Voice transcription
+- [x] Gradio interface
+- [x] Testing scripts
+
+---
+
+## License
+
+No license file is currently included in the repository.
+
+If this project is distributed publicly, add an appropriate `LICENSE` file.
