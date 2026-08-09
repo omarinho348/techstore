@@ -18,9 +18,9 @@ from beanie import PydanticObjectId
 from dotenv import load_dotenv
 
 from api.models.customer import Customer
-from api.models.order import Order, OrderStatus
+from api.models.order import Order, OrderStatus, OrderItem
 from api.models.product import Product
-from api.models.ticket import Ticket
+from api.models.ticket import Ticket, TicketStatus
 from rag import retrieve_relevant_chunks
 
 load_dotenv()
@@ -428,6 +428,34 @@ async def send_support_email(
         timezone.utc
     ).strftime("%Y-%m-%d %H:%M:%S UTC")
 
+    # Create a ticket in the database so escalations are visible
+    # Generate a human-readable ticket id like T-YYYYMMDDHHMMSS-HEX
+    now = datetime.now(timezone.utc)
+    hex_suffix = os.urandom(2).hex().upper()
+    ticket_id = f"T-{now.strftime('%Y%m%d%H%M%S')}-{hex_suffix}"
+
+    # Try to find the customer id from the email
+    customer = await Customer.find_one(Customer.email == customer_email)
+    customer_id = str(customer.id) if customer else "anonymous"
+
+    try:
+        ticket = Ticket(
+            ticket_id=ticket_id,
+            customer_id=customer_id,
+            subject=(f"Escalation from {customer_email}"),
+            description=issue,
+            status=TicketStatus.OPEN,
+            created_at=now,
+            updated_at=now,
+        )
+
+        # Insert the ticket
+        await ticket.insert()
+
+    except Exception as err:
+        logger.error("send_support_email: failed to create ticket: %s", err)
+        # proceed without ticket but inform caller
+        ticket = None
     email_params = {
         "from": "TechStore Assistant <onboarding@resend.dev>",
         "to": [support_team_email],
@@ -456,6 +484,7 @@ async def send_support_email(
 
         return {
             "success": True,
+            "ticket_id": ticket.ticket_id if ticket else None,
             "message": (
                 "Your issue has been escalated "
                 "to our support team."
@@ -470,6 +499,7 @@ async def send_support_email(
 
         return {
             "success": False,
+            "ticket_id": ticket.ticket_id if ticket else None,
             "error": (
                 f"Failed to send escalation email: {error}"
             ),
@@ -584,4 +614,145 @@ async def get_my_orders(customer_email: str):
         "found": True,
         "count": len(order_list),
         "orders": order_list,
+    }
+
+
+# =====================================================================
+# TOOL 9: CREATE ORDER VIA CHAT
+# =====================================================================
+
+async def create_order_via_chat(
+    customer_email: str,
+    product_name: str,
+    quantity: int,
+) -> dict[str, Any]:
+    """
+    Create an order on behalf of an authenticated customer when they
+    ask to purchase via chat. This updates product stock and inserts
+    the order into the database.
+
+    Args:
+        customer_email: Authenticated customer's email.
+        product_name: Product name (partial or full match, case-insensitive).
+        quantity: Integer quantity to purchase.
+
+    Returns:
+        A dict with success, order_id and details or an error message.
+    """
+
+    # Basic validation
+    try:
+        quantity = int(quantity)
+    except Exception:
+        return {
+            "success": False,
+            "error": "Quantity must be an integer.",
+        }
+
+    if quantity <= 0:
+        return {
+            "success": False,
+            "error": "Quantity must be greater than zero.",
+        }
+
+    # Find the customer
+    customer = await Customer.find_one(Customer.email == customer_email)
+
+    if customer is None:
+        return {
+            "success": False,
+            "error": "Authenticated customer not found.",
+        }
+
+    # Find the product (case-insensitive partial match)
+    normalized = product_name.strip().lower()
+
+    products = await Product.find_all().to_list()
+
+    # Prefer exact name match, otherwise first partial match
+    exact = None
+    partial = None
+
+    for p in products:
+        name_lower = p.name.lower()
+        if name_lower == normalized:
+            exact = p
+            break
+        if normalized in name_lower and partial is None:
+            partial = p
+
+    product = exact or partial
+
+    if product is None:
+        return {
+            "success": False,
+            "error": f"No product found matching '{product_name}'.",
+        }
+
+    # Check stock
+    if product.stock < quantity:
+        return {
+            "success": False,
+            "error": (
+                f"Insufficient stock for '{product.name}'. "
+                f"Available: {product.stock}, requested: {quantity}"
+            ),
+        }
+
+    # Validate price and build order item
+    order_item = OrderItem(
+        product_id=str(product.id),
+        product_name=product.name,
+        quantity=quantity,
+        unit_price=product.price,
+    )
+
+    total = order_item.subtotal
+
+    # Update product stock
+    product.stock -= quantity
+    product.updated_at = datetime.now(timezone.utc)
+
+    await product.save()
+
+    # Create order (use PROCESSING to reflect immediate purchase)
+    order = Order(
+        customer_id=str(customer.id),
+        items=[order_item],
+        total=total,
+        status=OrderStatus.PROCESSING,
+    )
+
+    await order.insert()
+
+    logger.info(
+        "create_order_via_chat: created order %s for customer %s",
+        str(order.id),
+        customer_email,
+    )
+
+    return {
+        "success": True,
+        "order_id": str(order.id),
+        "message": (
+            f"Order {str(order.id)} created for {customer.email}: "
+            f"{order_item.quantity}× {order_item.product_name} "
+            f"(unit_price={order_item.unit_price}) — total {order.total}"
+        ),
+        "order": {
+            "id": str(order.id),
+            "customer_id": order.customer_id,
+            "items": [
+                {
+                    "product_id": order_item.product_id,
+                    "product_name": order_item.product_name,
+                    "quantity": order_item.quantity,
+                    "unit_price": order_item.unit_price,
+                    "subtotal": order_item.subtotal,
+                }
+            ],
+            "total": order.total,
+            "status": order.status.value,
+            "created_at": order.created_at.isoformat(),
+        },
     }

@@ -33,6 +33,7 @@ from tools import (
     send_support_email,
     ticket_inquiry,
     get_my_orders,
+    create_order_via_chat,
 )
 
 load_dotenv()
@@ -70,6 +71,7 @@ ticket_inquiry_tool = function_tool(ticket_inquiry)
 send_support_email_tool = function_tool(send_support_email)
 search_knowledge_base_tool = function_tool(search_knowledge_base)
 get_my_orders_tool = function_tool(get_my_orders)
+create_order_tool = function_tool(create_order_via_chat)
 
 knowledge_agent = Agent(
     name="Knowledge Agent",
@@ -208,6 +210,7 @@ The workflow manager will combine your answer with other specialists.
         cancel_order_tool,
         check_refund_eligibility_tool,
         get_my_orders_tool,
+        create_order_tool,
     ],
 )
 

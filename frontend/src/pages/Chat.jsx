@@ -249,6 +249,69 @@ export default function Chat() {
 
 }
 
+// attach uploadImage method to handleSend so child can call it
+handleSend.uploadImage = async function (file) {
+    stopTypingTimer();
+    typingQueue.current = "";
+
+    let sessionId = currentSessionId;
+
+    if (!sessionId) {
+        skipNextEmptyHistoryLoad.current = true;
+        sessionId = await newConversation();
+    }
+
+    if (!sessionId) return;
+
+    setMessages((previous) => [
+        ...previous,
+        {
+            role: "user",
+            message: `[Image uploaded: ${file.name}]`,
+        },
+        {
+            role: "assistant",
+            message: "",
+            status: "Processing image...",
+            agent: "",
+        },
+    ]);
+
+    await loadConversations();
+
+    try {
+        const result = await chatService.uploadImage(sessionId, file);
+
+        // show assistant response
+        const assistantText = result.response ?? "[No response]";
+
+        setMessages((previous) => {
+            const updated = [...previous];
+
+            updated[updated.length - 1] = {
+                ...updated[updated.length - 1],
+                message: assistantText,
+                status: "",
+            };
+
+            return updated;
+        });
+
+    } catch (err) {
+        setMessages((previous) => {
+            const updated = [...previous];
+
+            updated[updated.length - 1] = {
+                ...updated[updated.length - 1],
+                message: "[Image processing failed]",
+                status: "",
+            };
+
+            return updated;
+        });
+    }
+};
+
     return (
 
         <MainLayout>
@@ -262,7 +325,10 @@ export default function Chat() {
 
                 <ChatInput
                     onSend={handleSend}
+                    // expose uploadImage helper via onSend.uploadImage
+                    ref={null}
                 />
+
 
             </div>
 
