@@ -1,197 +1,756 @@
-# TechStore AI Customer Support Assistant
+[README(2).md](https://github.com/user-attachments/files/30874217/README.2.md)
+# TechStore AI Customer Support
 
-A tool-calling AI customer support assistant for a fictional electronics
-retailer, TechStore. Built with the OpenAI Python SDK (Structured
-Outputs / strict function calling), Gradio, python-dotenv, Resend, and
-Chroma (for retrieval-augmented generation).
+An AI-powered customer support platform for a fictional electronics store, built with a **React frontend**, **FastAPI backend**, **MongoDB**, and an **agentic AI architecture**.
 
-The assistant can check order status, search products, cancel eligible
-orders, check refund eligibility, look up support tickets, escalate
-unresolved issues to a human support team via email, and answer
-open-ended policy/FAQ questions (return policy, warranty, shipping,
-store info) using a small RAG pipeline over a local knowledge base.
+The system combines specialized AI agents, tool calling, RAG, MongoDB data, and voice input to provide an end-to-end customer support experience.
 
 ---
 
 ## Features
 
-- **Seven tools**, six backed by structured (in-memory, fake) data and
-  one backed by retrieval over a document knowledge base:
-  - `check_order_status(order_id)`
-  - `search_products(keyword)` — case-insensitive, partial, plural-tolerant
-  - `cancel_order(order_id)` — enforces cancellation business rules
-  - `check_refund_eligibility(order_id)`
-  - `ticket_inquiry(ticket_id)`
-  - `send_support_email(customer_email, issue)` — last-resort escalation only
-  - `search_knowledge_base(query)` — RAG over policy/FAQ documents (return
-    policy, warranty, shipping, store info, general FAQ)
-- **Structured Outputs** (`strict: true`) on every tool schema, guaranteeing
-  well-formed tool call arguments.
-- A system prompt that enforces: always use tools for facts, never invent
-  data, route policy questions to the knowledge base and record lookups to
-  the matching backend tool (a single question can trigger both), and only
-  escalate via email when nothing else can resolve the issue.
-- A **RAG pipeline** (`rag.py`): documents are chunked, embedded with
-  OpenAI (`text-embedding-3-small`), stored in a local persistent Chroma
-  collection, and retrieved by a calibrated similarity-distance threshold
-  — so genuinely irrelevant questions correctly come back empty instead
-  of being answered from an unrelated policy chunk.
-- A Gradio chat UI (`ChatInterface`) with a dark custom theme, streaming
-  "typing" responses, custom avatars, and example prompts.
+- 🤖 Multi-agent AI customer support
+- 🔀 Triage and specialist agent handoffs
+- ⚛️ React frontend
+- 🚀 FastAPI backend
+- 🍃 MongoDB database with Beanie/Motor
+- 🛒 Product and order management
+- 📦 Order status lookup
+- ❌ Order cancellation with business-rule validation
+- 💰 Refund eligibility checking
+- 🎫 Support ticket lookup
+- 📧 Human support escalation through Resend
+- 📚 RAG-based FAQ and policy answers
+- 🔎 ChromaDB vector search
+- 🎙️ Voice input with faster-whisper
+- 💬 Streaming chat responses
+- 🔐 Customer authentication and owned-conversation access
 
 ---
 
-## Project Structure
+## Architecture
 
+```mermaid
+flowchart TD
+    A[Customer] --> B[React Frontend]
+
+    B -->|HTTP / Streaming| C[FastAPI Backend]
+
+    C --> D[Chat / Conversation Routes]
+    C --> E[Authentication]
+    C --> F[Business Routers]
+
+    D --> G[Triage Agent]
+
+    G --> H[Order & Product Agent]
+    G --> I[Support Agent]
+    G --> J[Knowledge Agent]
+
+    H --> K[Business Tools]
+    I --> K
+    J --> L[RAG Pipeline]
+
+    K --> M[(MongoDB)]
+    L --> N[ChromaDB]
+    L --> O[OpenAI Embeddings]
+
+    I --> P[Resend]
+
+    B --> Q[Voice Input]
+    Q --> R[faster-whisper]
+    R --> B
 ```
-techstore/
+
+### Request Flow
+
+```text
+React Frontend
+      ↓
+FastAPI API
+      ↓
+Triage Agent
+      ↓
+┌────────────────────┬─────────────────┬─────────────────┐
+│                    │                 │
+▼                    ▼                 ▼
+Order & Product   Support Agent   Knowledge Agent
+Agent
+│                    │                 │
+▼                    ▼                 ▼
+Business Tools      Resend            RAG
+│                                      │
+▼                                      ▼
+MongoDB                               ChromaDB
+```
+
+---
+
+## Frontend
+
+The frontend is built with **React** and is responsible for the customer-facing application.
+
+It handles:
+
+- Chat interface
+- Conversation/session management
+- Authentication UI
+- Sending messages to the FastAPI backend
+- Streaming assistant responses
+- Voice input
+- File/input interactions
+- Displaying agent responses and conversation history
+
+The frontend communicates with the backend through HTTP API endpoints rather than directly accessing MongoDB or the AI agents.
+
+---
+
+## Backend
+
+The backend is built with **FastAPI** and provides the API layer between the React application and the AI/business logic.
+
+Responsibilities include:
+
+- Authentication
+- Customer management
+- Conversation management
+- Chat streaming
+- Database access
+- Agent execution
+- Business operations
+- RAG retrieval
+- Support escalation
+
+FastAPI also provides automatic API documentation through:
+
+```text
+/docs
+```
+
+and:
+
+```text
+/redoc
+```
+
+---
+
+## Agent System
+
+### Triage Agent
+
+The main coordinator.
+
+It identifies the customer's intent and routes requests to the appropriate specialist.
+
+It can handle multi-intent requests and continue the workflow until the requested tasks are completed.
+
+### Order & Product Agent
+
+Handles:
+
+- Product search
+- Order status
+- Order cancellation
+- Refund eligibility
+
+It uses backend tools to retrieve and modify MongoDB data instead of guessing.
+
+### Support Agent
+
+Handles:
+
+- Support ticket inquiries
+- Human support escalation
+
+Escalation uses the email service only when appropriate.
+
+### Knowledge Agent
+
+Handles:
+
+- Return policy
+- Warranty
+- Shipping
+- Store information
+- FAQs
+
+It uses the RAG pipeline to retrieve information from the TechStore knowledge base.
+
+---
+
+## Database
+
+The project uses **MongoDB** for persistent application data.
+
+The backend uses:
+
+- **Beanie** for MongoDB ODM/model management
+- **Motor** for asynchronous MongoDB access
+
+The database stores application entities such as:
+
+- Customers
+- Products
+- Orders
+- Support tickets
+- Conversations/messages
+- Message logs
+
+### Database Architecture
+
+```text
+FastAPI
+   ↓
+Beanie Models
+   ↓
+Motor
+   ↓
+MongoDB Atlas
+```
+
+This replaces the previous `fake_database.json` approach and allows data such as orders and conversations to persist between application restarts.
+
+---
+
+## API Structure
+
+The backend is organized into routers, schemas, models, and database configuration.
+
+A simplified structure is:
+
+```text
+api/
+├── app.py
+├── database.py
 │
-├── main.py                # Orchestration: OpenAI client, system prompt,
-│                           # tool-calling loop, Gradio app + UI styling
-├── tools.py                # Business logic: the seven tool functions
-├── schemas.py               # OpenAI tool schemas (Structured Outputs)
-├── rag.py                   # RAG pipeline: chunking, embeddings, Chroma
-│                             # storage, calibrated-threshold retrieval
-├── fake_database.json       # In-memory mock data (orders, products, tickets)
-├── knowledge_base/           # Plain-text policy/FAQ source documents
-│   ├── return_policy.txt
-│   ├── warranty.txt
-│   ├── shipping_policy.txt
-│   ├── store_information.txt
-│   └── faq.txt
-├── chroma_store/              # Generated: persisted vector store
-│                               # (git-ignored, rebuilt from knowledge_base/)
-├── assets/                    # Generated chat UI avatar images
-│   ├── user_avatar.png
-│   └── bot_avatar.png
-├── .env                      # API keys (NOT committed to version control)
-├── .gitignore
-├── README.md
-└── pyproject.toml
+├── models/
+│   ├── customer.py
+│   ├── product.py
+│   ├── order.py
+│   ├── ticket.py
+│   └── message_log.py
+│
+├── schemas/
+│   └── Pydantic request/response schemas
+│
+└── routers/
+    ├── auth.py
+    ├── chat.py
+    ├── conversations.py
+    ├── customers.py
+    ├── products.py
+    ├── orders.py
+    └── tickets.py
 ```
 
-Your knowledge base filenames may differ from the list above if you're
-using your own mentor-provided documents — `rag.py` loads whatever
-`.txt` files are present in `knowledge_base/`, no hardcoded filenames.
+The exact router/model names can evolve as the backend grows, but the architecture keeps API routing, validation, database models, and AI logic separated.
 
 ---
 
-## Setup
+## AI & RAG
 
-### 1. Clone and create a virtual environment
+The AI layer remains separated from the API layer.
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate      # on Windows: .venv\Scripts\activate
+```text
+FastAPI
+   ↓
+Agent Team
+   ↓
+Specialized Agents
+   ↓
+Tools
+   ├── MongoDB
+   ├── Resend
+   └── RAG
 ```
 
-### 2. Install dependencies
+### RAG Pipeline
 
-```bash
-pip install -e .
+```text
+knowledge_base/*.txt
+        ↓
+Document Loading
+        ↓
+Chunking
+        ↓
+OpenAI Embeddings
+        ↓
+ChromaDB
+        ↓
+Similarity Search
+        ↓
+Knowledge Agent
+        ↓
+Customer Response
 ```
 
-(or manually: `pip install openai gradio python-dotenv resend chromadb`)
+Current knowledge-base content includes:
 
-### 3. Configure environment variables
-
-Edit `.env` and fill in your real keys:
-
-```
-OPENAI_API_KEY=your-openai-key-here
-RESEND_API_KEY=your-resend-key-here
-SUPPORT_TEAM_EMAIL=your-resend-signup-email@example.com
-```
-
-- Get an OpenAI key from https://platform.openai.com/api-keys
-- Get a Resend key from https://resend.com/api-keys
-- `SUPPORT_TEAM_EMAIL` must match the email address you signed up to
-  Resend with — the sandbox sender (`onboarding@resend.dev`) can only
-  deliver to that address until you verify your own domain.
-
-**Never commit `.env`.** It's already listed in `.gitignore`.
-
-### 4. Confirm your OpenAI model access
-
-Your OpenAI project may not have access to every model. Check
-`main.py`'s `OPENAI_MODEL` constant and update it to a model your key
-can use if you hit a `403 model_not_found` error.
-
-### 5. Build the knowledge base (first run only)
-
-The first time you run the app (or `search_knowledge_base` is called),
-`rag.py` embeds every chunk in `knowledge_base/*.txt` via the OpenAI
-embeddings API and stores them in a local `chroma_store/` folder. This
-costs a small number of embedding API calls, but only happens once —
-subsequent runs detect the existing collection and skip re-embedding.
-
-If you edit or add files in `knowledge_base/`, delete `chroma_store/`
-first to force a fresh embed; otherwise the app keeps serving the old,
-now-stale data.
-
-### 6. Run the app
-
-```bash
-python main.py
+```text
+knowledge_base/
+├── faq.txt
+├── return_policy.txt
+├── shipping_policy.txt
+├── store_information.txt
+└── warranty.txt
 ```
 
-This opens the Gradio chat UI in your browser (typically at
-`http://127.0.0.1:7860`).
+A relevance threshold is used to avoid answering unrelated questions from irrelevant documents.
+
+If the knowledge base is modified, rebuild the ChromaDB store so the new content is embedded.
+
+---
+
+## Tools
+
+The AI agents can use business tools for real application operations:
+
+| Tool | Purpose |
+|---|---|
+| `check_order_status` | Retrieve order information |
+| `search_products` | Search products |
+| `cancel_order` | Cancel eligible orders |
+| `check_refund_eligibility` | Check refund eligibility |
+| `ticket_inquiry` | Retrieve support ticket information |
+| `send_support_email` | Escalate an issue to human support |
+| `search_knowledge_base` | Retrieve policy and FAQ information |
+
+The tools now interact with the application's backend/database instead of a local fake JSON database.
 
 ---
 
 ## Business Rules
 
-- **Order cancellation:** only `Processing` orders can be cancelled.
-  `Shipped`, `Delivered`, and already-`Cancelled` orders are rejected
-  with a clear explanation.
-- **Email escalation:** the assistant is instructed (both in its system
-  prompt and in the `send_support_email` tool description) to use this
-  only as a last resort, after the other six tools have failed to
-  resolve the issue.
-- **Knowledge base vs. backend routing:** the system prompt tells the
-  model to use `search_knowledge_base` for open-ended policy/FAQ
-  questions not tied to a specific record, and the matching backend
-  tool when a question references a specific order/product/ticket ID.
-  A single question can trigger both in the same turn (e.g., "what's
-  your return policy, and is order 1003 eligible for a refund?").
-- **Relevance threshold:** `search_knowledge_base` only returns chunks
-  within a calibrated similarity-distance cutoff (`MAX_RELEVANT_DISTANCE`
-  in `rag.py`). Genuinely unrelated questions correctly come back empty
-  (`found: false`) rather than being answered from a mismatched chunk.
+Important rules are enforced by the backend/tool layer.
+
+### Order Cancellation
+
+```text
+Processing → Can be cancelled
+Shipped    → Cannot be cancelled
+Delivered  → Cannot be cancelled
+Cancelled  → Cannot be cancelled again
+```
+
+The AI cannot simply claim that an order was cancelled. The backend operation must succeed first.
+
+### Knowledge Retrieval
+
+Policy and FAQ questions are routed to the knowledge base.
+
+Specific records such as an order ID or ticket ID are handled through the corresponding backend tools.
+
+### Support Escalation
+
+Human escalation is performed through the support email integration and should only be used when appropriate.
 
 ---
 
-## Sample Data
+## Voice Input
 
-`fake_database.json` includes:
+The application supports voice messages using **faster-whisper**.
 
-- **4 orders** (`1001`–`1004`) covering each status: Processing, Shipped,
-  Delivered, Cancelled.
-- **5 products** across Laptop, Phone, and Accessories categories.
-- **2 support tickets** (`T-5001`, `T-5002`).
+```text
+Microphone
+    ↓
+React Frontend
+    ↓
+Voice/Audio Request
+    ↓
+faster-whisper
+    ↓
+Transcribed Text
+    ↓
+Chat API
+    ↓
+Agent Workflow
+```
 
-Feel free to edit this file directly to add more test data — no code
-changes required, since `tools.py` loads it dynamically at startup.
-
-`knowledge_base/` contains short plain-text policy/FAQ documents (return
-policy, warranty, shipping, store information, and general FAQ). Each
-document is chunked on blank lines, so keep related content in
-paragraph form for the chunking to stay meaningful — see `rag.py`'s
-`chunk_text()`.
+The transcription is performed locally rather than requiring a separate cloud transcription service.
 
 ---
 
-## Notes
+## Project Structure
 
-- This version uses an **in-memory fake database** (a JSON file loaded
-  once at startup). A real database (PostgreSQL + SQLAlchemy) is planned
-  for a later iteration — the tool functions are written so that
-  swapping the data layer won't change how the model calls them.
-- Order mutations (e.g., a successful cancellation) persist only for the
-  lifetime of the running process — restarting the app reloads
-  `fake_database.json` fresh from disk.
-- The RAG pipeline uses Chroma and the OpenAI embeddings API directly,
-  rather than a higher-level library like EmbedChain — for a knowledge
-  base this small, direct calls keep the pipeline transparent and easy
-  to debug (see `rag.py`) without adding an abstraction layer.
+```text
+techstore/
+│
+├── api/
+│   ├── app.py
+│   ├── database.py
+│   ├── models/
+│   ├── schemas/
+│   └── routers/
+│
+├── frontend/
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   └── ...
+│
+├── knowledge_base/
+│   ├── faq.txt
+│   ├── return_policy.txt
+│   ├── shipping_policy.txt
+│   ├── store_information.txt
+│   └── warranty.txt
+│
+├── agent_team.py
+├── tools.py
+├── rag.py
+├── schemas.py
+│
+├── test_files/
+│
+├── .env
+├── .gitignore
+├── pyproject.toml
+├── uv.lock
+└── README.md
+```
+
+---
+
+## Technology Stack
+
+### Frontend
+
+- React
+- JavaScript / JSX
+- CSS
+- Fetch/API communication
+
+### Backend
+
+- Python 3.12+
+- FastAPI
+- Uvicorn
+- Pydantic
+
+### Database
+
+- MongoDB Atlas
+- Beanie
+- Motor
+
+### AI
+
+- OpenAI Agents SDK
+- OpenAI models
+- Function tools
+- Agent handoffs
+- OpenAI embeddings
+
+### RAG
+
+- ChromaDB
+- `text-embedding-3-small`
+
+### Voice
+
+- faster-whisper
+
+### External Services
+
+- Resend
+
+### Development
+
+- `uv`
+- Git / GitHub
+
+---
+
+## Setup
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/omarinho348/techstore.git
+cd techstore
+```
+
+### 2. Install backend dependencies
+
+Using `uv`:
+
+```bash
+uv sync
+```
+
+Or create a virtual environment manually:
+
+```bash
+python -m venv .venv
+```
+
+Activate it:
+
+**Windows**
+
+```powershell
+.venv\Scripts\activate
+```
+
+**Linux / macOS / WSL**
+
+```bash
+source .venv/bin/activate
+```
+
+### 3. Install frontend dependencies
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+---
+
+## Environment Variables
+
+Create a `.env` file for the backend:
+
+```env
+OPENAI_API_KEY=your_openai_api_key
+MONGODB_URI=your_mongodb_connection_string
+DATABASE_NAME=your_database_name
+
+RESEND_API_KEY=your_resend_api_key
+SUPPORT_TEAM_EMAIL=your_support_email
+```
+
+The exact environment variable names should match the project's configuration.
+
+> Never commit `.env` or API keys to GitHub.
+
+---
+
+## Running the Application
+
+### Start the FastAPI Backend
+
+From the project root:
+
+```bash
+uv run uvicorn api.app:app --reload
+```
+
+The API will normally be available at:
+
+```text
+http://127.0.0.1:8000
+```
+
+Interactive API documentation:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+### Start the React Frontend
+
+In another terminal:
+
+```bash
+cd frontend
+npm run dev
+```
+
+The frontend will display its local development URL in the terminal.
+
+Both applications must be running for the complete system to work.
+
+---
+
+## Example Requests
+
+### Check Order Status
+
+```text
+Where is my order?
+```
+
+The request flows through:
+
+```text
+React
+  ↓
+FastAPI
+  ↓
+Triage Agent
+  ↓
+Order & Product Agent
+  ↓
+check_order_status()
+  ↓
+MongoDB
+  ↓
+Response
+```
+
+### Product Search
+
+```text
+Do you have any laptops available?
+```
+
+```text
+React
+  ↓
+FastAPI
+  ↓
+Order & Product Agent
+  ↓
+search_products()
+  ↓
+MongoDB
+```
+
+### Knowledge Question
+
+```text
+What is your warranty policy?
+```
+
+```text
+React
+  ↓
+FastAPI
+  ↓
+Knowledge Agent
+  ↓
+RAG
+  ↓
+ChromaDB
+  ↓
+Response
+```
+
+### Multi-Intent Request
+
+```text
+What is your return policy, and can I cancel my order?
+```
+
+The Triage Agent can route the different parts of the request to the appropriate tools/agents and combine the results.
+
+---
+
+## Authentication & Conversations
+
+The FastAPI backend manages authenticated customers and their conversations.
+
+A typical chat flow is:
+
+```text
+Login
+  ↓
+Authenticated Customer
+  ↓
+Create/Select Conversation
+  ↓
+POST /stream
+  ↓
+Verify Conversation Ownership
+  ↓
+Agent Workflow
+  ↓
+Stream Response
+  ↓
+Store Conversation Messages
+```
+
+Conversation ownership is checked by the backend so customers cannot access another customer's conversation.
+
+---
+
+## Testing
+
+The repository contains tests for different parts of the system, including:
+
+- Business rules
+- Agent behavior
+- RAG
+- Conversations
+- Email escalation
+- API/backend functionality
+
+Backend tests can be run from the project environment using the project's configured test scripts/framework.
+
+---
+
+## Key Design Principles
+
+### 1. Specialized Agents
+
+Different responsibilities are separated into focused agents.
+
+### 2. Tool-Based Actions
+
+The model uses tools for real business operations instead of inventing database results.
+
+### 3. Business Logic Outside the LLM
+
+Critical rules are enforced by backend code.
+
+### 4. Persistent Database
+
+MongoDB provides persistent storage for customers, products, orders, tickets, and conversations.
+
+### 5. RAG Grounding
+
+Company-specific information is retrieved from the TechStore knowledge base.
+
+### 6. API Separation
+
+The React frontend communicates with FastAPI through APIs instead of directly accessing the database or AI layer.
+
+### 7. Streaming
+
+The backend can stream AI responses to the React frontend for a more responsive chat experience.
+
+---
+
+## Future Improvements
+
+- Improve authentication and authorization
+- Add production-grade database indexing
+- Add more advanced RAG retrieval/reranking
+- Add agent tracing and observability
+- Add automated agent evaluation
+- Add stronger frontend error handling
+- Add deployment configuration
+- Add CI/CD
+- Add production monitoring
+
+---
+
+## Project Status
+
+Current architecture includes:
+
+- [x] React frontend
+- [x] FastAPI backend
+- [x] MongoDB database
+- [x] Beanie/Motor database integration
+- [x] Customer authentication
+- [x] Conversation management
+- [x] Streaming chat endpoint
+- [x] Multi-agent AI architecture
+- [x] Agent handoffs
+- [x] Business tools
+- [x] RAG knowledge base
+- [x] ChromaDB
+- [x] Voice transcription
+- [x] Resend support escalation
+- [x] Backend/API separation
+
+---
+
+## License
+
+No license file is currently included in the repository.
+
+If this project is distributed publicly, add an appropriate `LICENSE` file.
