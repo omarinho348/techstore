@@ -1,4 +1,3 @@
-[README(2).md](https://github.com/user-attachments/files/30874217/README.2.md)
 # TechStore AI Customer Support
 
 An AI-powered customer support platform for a fictional electronics store, built with a **React frontend**, **FastAPI backend**, **MongoDB**, and an **agentic AI architecture**.
@@ -26,64 +25,11 @@ The system combines specialized AI agents, tool calling, RAG, MongoDB data, and 
 - 💬 Streaming chat responses
 - 🔐 Customer authentication and owned-conversation access
 
----
+<img width="1353" height="634" alt="image" src="https://github.com/user-attachments/assets/aea45222-4508-404b-9d3f-a24d440a4d55" />
 
-## Architecture
+<img width="1350" height="641" alt="image" src="https://github.com/user-attachments/assets/66465262-334b-4eb5-acb1-6a3dc8852b59" />
 
-```mermaid
-flowchart TD
-    A[Customer] --> B[React Frontend]
-
-    B -->|HTTP / Streaming| C[FastAPI Backend]
-
-    C --> D[Chat / Conversation Routes]
-    C --> E[Authentication]
-    C --> F[Business Routers]
-
-    D --> G[Triage Agent]
-
-    G --> H[Order & Product Agent]
-    G --> I[Support Agent]
-    G --> J[Knowledge Agent]
-
-    H --> K[Business Tools]
-    I --> K
-    J --> L[RAG Pipeline]
-
-    K --> M[(MongoDB)]
-    L --> N[ChromaDB]
-    L --> O[OpenAI Embeddings]
-
-    I --> P[Resend]
-
-    B --> Q[Voice Input]
-    Q --> R[faster-whisper]
-    R --> B
-```
-
-### Request Flow
-
-```text
-React Frontend
-      ↓
-FastAPI API
-      ↓
-Triage Agent
-      ↓
-┌────────────────────┬─────────────────┬─────────────────┐
-│                    │                 │
-▼                    ▼                 ▼
-Order & Product   Support Agent   Knowledge Agent
-Agent
-│                    │                 │
-▼                    ▼                 ▼
-Business Tools      Resend            RAG
-│                                      │
-▼                                      ▼
-MongoDB                               ChromaDB
-```
-
----
+<img width="1361" height="632" alt="image" src="https://github.com/user-attachments/assets/f61b6237-5c62-4243-a64e-53736d5a9aa3" />
 
 ## Frontend
 
