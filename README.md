@@ -1,16 +1,19 @@
-[README.md](https://github.com/user-attachments/files/30874137/README.md)
+[README(2).md](https://github.com/user-attachments/files/30874173/README.2.md)
 # TechStore AI Customer Support
 
-An AI-powered customer support assistant for a fictional electronics store, built with a **multi-agent architecture**, **RAG**, **tool calling**, and **voice input**.
+An AI-powered customer support platform for a fictional electronics store, built with a **React frontend**, **FastAPI backend**, **MongoDB**, and an **agentic AI architecture**.
 
-The system uses a Triage Agent to route customer requests to specialized agents for orders/products, support, and company knowledge.
+The system combines specialized AI agents, tool calling, RAG, MongoDB data, and voice input to provide an end-to-end customer support experience.
 
 ---
 
 ## Features
 
-- 🤖 Multi-agent customer support
-- 🔀 Intelligent agent handoffs
+- 🤖 Multi-agent AI customer support
+- 🔀 Triage and specialist agent handoffs
+- ⚛️ React frontend
+- 🚀 FastAPI backend
+- 🍃 MongoDB database with Beanie/Motor
 - 🛒 Product and order management
 - 📦 Order status lookup
 - ❌ Order cancellation with business-rule validation
@@ -19,10 +22,9 @@ The system uses a Triage Agent to route customer requests to specialized agents 
 - 📧 Human support escalation through Resend
 - 📚 RAG-based FAQ and policy answers
 - 🔎 ChromaDB vector search
-- 🎙️ Local voice transcription with faster-whisper
-- 💬 Gradio chat interface
-- ⚡ Streaming-style responses
-- 🧪 Dedicated testing scripts
+- 🎙️ Voice input with faster-whisper
+- 💬 Streaming chat responses
+- 🔐 Customer authentication and owned-conversation access
 
 ---
 
@@ -30,40 +32,44 @@ The system uses a Triage Agent to route customer requests to specialized agents 
 
 ```mermaid
 flowchart TD
-    A[Customer] --> B[Gradio UI]
+    A[Customer] --> B[React Frontend]
 
-    B -->|Text| C[Triage Agent]
-    B -->|Voice| V[faster-whisper]
-    V --> C
+    B -->|HTTP / Streaming| C[FastAPI Backend]
 
-    C --> D[Order & Product Agent]
-    C --> E[Support Agent]
-    C --> F[Knowledge Agent]
+    C --> D[Chat / Conversation Routes]
+    C --> E[Authentication]
+    C --> F[Business Routers]
 
-    D --> G[Business Tools]
-    E --> G
-    F --> H[RAG Search]
+    D --> G[Triage Agent]
 
-    G --> I[fake_database.json]
-    E --> J[Resend]
-    H --> K[ChromaDB]
+    G --> H[Order & Product Agent]
+    G --> I[Support Agent]
+    G --> J[Knowledge Agent]
 
-    D --> L[Customer Response]
-    E --> L
-    F --> L
+    H --> K[Business Tools]
+    I --> K
+    J --> L[RAG Pipeline]
 
-    L --> B
+    K --> M[(MongoDB)]
+    L --> N[ChromaDB]
+    L --> O[OpenAI Embeddings]
+
+    I --> P[Resend]
+
+    B --> Q[Voice Input]
+    Q --> R[faster-whisper]
+    R --> B
 ```
 
 ### Request Flow
 
 ```text
-Customer
-   ↓
-Gradio UI
-   ↓
+React Frontend
+      ↓
+FastAPI API
+      ↓
 Triage Agent
-   ↓
+      ↓
 ┌────────────────────┬─────────────────┬─────────────────┐
 │                    │                 │
 ▼                    ▼                 ▼
@@ -71,32 +77,83 @@ Order & Product   Support Agent   Knowledge Agent
 Agent
 │                    │                 │
 ▼                    ▼                 ▼
-Business Tools     Resend            RAG
+Business Tools      Resend            RAG
 │                                      │
 ▼                                      ▼
-Mock Database                         ChromaDB
+MongoDB                               ChromaDB
 ```
 
 ---
 
-## Agents
+## Frontend
+
+The frontend is built with **React** and is responsible for the customer-facing application.
+
+It handles:
+
+- Chat interface
+- Conversation/session management
+- Authentication UI
+- Sending messages to the FastAPI backend
+- Streaming assistant responses
+- Voice input
+- File/input interactions
+- Displaying agent responses and conversation history
+
+The frontend communicates with the backend through HTTP API endpoints rather than directly accessing MongoDB or the AI agents.
+
+---
+
+## Backend
+
+The backend is built with **FastAPI** and provides the API layer between the React application and the AI/business logic.
+
+Responsibilities include:
+
+- Authentication
+- Customer management
+- Conversation management
+- Chat streaming
+- Database access
+- Agent execution
+- Business operations
+- RAG retrieval
+- Support escalation
+
+FastAPI also provides automatic API documentation through:
+
+```text
+/docs
+```
+
+and:
+
+```text
+/redoc
+```
+
+---
+
+## Agent System
 
 ### Triage Agent
 
 The main coordinator.
 
-It identifies the customer's intent and routes the request to the appropriate specialist. It can handle requests containing multiple intents and ensures the required tasks are completed before producing the final response.
+It identifies the customer's intent and routes requests to the appropriate specialist.
+
+It can handle multi-intent requests and continue the workflow until the requested tasks are completed.
 
 ### Order & Product Agent
 
 Handles:
 
-- Order status
 - Product search
+- Order status
 - Order cancellation
 - Refund eligibility
 
-It relies on tools instead of guessing business information.
+It uses backend tools to retrieve and modify MongoDB data instead of guessing.
 
 ### Support Agent
 
@@ -105,7 +162,7 @@ Handles:
 - Support ticket inquiries
 - Human support escalation
 
-When escalation is requested, it uses the email tool to contact the support team.
+Escalation uses the email service only when appropriate.
 
 ### Knowledge Agent
 
@@ -117,64 +174,117 @@ Handles:
 - Store information
 - FAQs
 
-It uses the RAG knowledge base instead of relying only on the model's knowledge.
+It uses the RAG pipeline to retrieve information from the TechStore knowledge base.
 
 ---
 
-## Tools
+## Database
 
-The project contains seven main business tools:
+The project uses **MongoDB** for persistent application data.
 
-| Tool | Purpose |
-|---|---|
-| `check_order_status` | Check order status, payment, and total |
-| `search_products` | Search products by name/category |
-| `cancel_order` | Cancel eligible orders |
-| `check_refund_eligibility` | Check refund eligibility |
-| `ticket_inquiry` | Look up support tickets |
-| `send_support_email` | Escalate issues to human support |
-| `search_knowledge_base` | Search company policies and FAQs |
+The backend uses:
 
-Important business rules are enforced inside the tools.
+- **Beanie** for MongoDB ODM/model management
+- **Motor** for asynchronous MongoDB access
 
-For example:
+The database stores application entities such as:
+
+- Customers
+- Products
+- Orders
+- Support tickets
+- Conversations/messages
+- Message logs
+
+### Database Architecture
 
 ```text
-Processing → Can be cancelled
-Shipped    → Cannot be cancelled
-Delivered  → Cannot be cancelled
-Cancelled  → Cannot be cancelled again
+FastAPI
+   ↓
+Beanie Models
+   ↓
+Motor
+   ↓
+MongoDB Atlas
 ```
 
-This prevents the model from bypassing the application's business logic.
+This replaces the previous `fake_database.json` approach and allows data such as orders and conversations to persist between application restarts.
 
 ---
 
-## RAG Knowledge Base
+## API Structure
 
-The Knowledge Agent uses Retrieval-Augmented Generation with **ChromaDB** and **OpenAI embeddings**.
+The backend is organized into routers, schemas, models, and database configuration.
+
+A simplified structure is:
+
+```text
+api/
+├── app.py
+├── database.py
+│
+├── models/
+│   ├── customer.py
+│   ├── product.py
+│   ├── order.py
+│   ├── ticket.py
+│   └── message_log.py
+│
+├── schemas/
+│   └── Pydantic request/response schemas
+│
+└── routers/
+    ├── auth.py
+    ├── chat.py
+    ├── conversations.py
+    ├── customers.py
+    ├── products.py
+    ├── orders.py
+    └── tickets.py
+```
+
+The exact router/model names can evolve as the backend grows, but the architecture keeps API routing, validation, database models, and AI logic separated.
+
+---
+
+## AI & RAG
+
+The AI layer remains separated from the API layer.
+
+```text
+FastAPI
+   ↓
+Agent Team
+   ↓
+Specialized Agents
+   ↓
+Tools
+   ├── MongoDB
+   ├── Resend
+   └── RAG
+```
+
+### RAG Pipeline
 
 ```text
 knowledge_base/*.txt
         ↓
-Document loading
+Document Loading
         ↓
-Paragraph chunks
+Chunking
         ↓
-OpenAI embeddings
+OpenAI Embeddings
         ↓
 ChromaDB
         ↓
-User question
-        ↓
-Similarity search
-        ↓
-Relevant chunks
+Similarity Search
         ↓
 Knowledge Agent
+        ↓
+Customer Response
 ```
 
-Current knowledge-base files:
+Current knowledge-base content includes:
 
 ```text
 knowledge_base/
@@ -185,35 +295,78 @@ knowledge_base/
 └── warranty.txt
 ```
 
-A relevance threshold is applied so unrelated questions do not automatically receive an irrelevant document.
+A relevance threshold is used to avoid answering unrelated questions from irrelevant documents.
 
-To rebuild the vector store after changing the knowledge base, remove:
+If the knowledge base is modified, rebuild the ChromaDB store so the new content is embedded.
+
+---
+
+## Tools
+
+The AI agents can use business tools for real application operations:
+
+| Tool | Purpose |
+|---|---|
+| `check_order_status` | Retrieve order information |
+| `search_products` | Search products |
+| `cancel_order` | Cancel eligible orders |
+| `check_refund_eligibility` | Check refund eligibility |
+| `ticket_inquiry` | Retrieve support ticket information |
+| `send_support_email` | Escalate an issue to human support |
+| `search_knowledge_base` | Retrieve policy and FAQ information |
+
+The tools now interact with the application's backend/database instead of a local fake JSON database.
+
+---
+
+## Business Rules
+
+Important rules are enforced by the backend/tool layer.
+
+### Order Cancellation
 
 ```text
-chroma_store/
+Processing → Can be cancelled
+Shipped    → Cannot be cancelled
+Delivered  → Cannot be cancelled
+Cancelled  → Cannot be cancelled again
 ```
 
-and restart the application.
+The AI cannot simply claim that an order was cancelled. The backend operation must succeed first.
+
+### Knowledge Retrieval
+
+Policy and FAQ questions are routed to the knowledge base.
+
+Specific records such as an order ID or ticket ID are handled through the corresponding backend tools.
+
+### Support Escalation
+
+Human escalation is performed through the support email integration and should only be used when appropriate.
 
 ---
 
 ## Voice Input
 
-Voice messages are transcribed locally using **faster-whisper**.
+The application supports voice messages using **faster-whisper**.
 
 ```text
 Microphone
     ↓
-Gradio Audio
+React Frontend
+    ↓
+Voice/Audio Request
     ↓
 faster-whisper
     ↓
 Transcribed Text
     ↓
-Normal Agent Workflow
+Chat API
+    ↓
+Agent Workflow
 ```
 
-The current configuration uses the Whisper `base` model with CPU/int8 processing.
+The transcription is performed locally rather than requiring a separate cloud transcription service.
 
 ---
 
@@ -222,71 +375,80 @@ The current configuration uses the Whisper `base` model with CPU/int8 processing
 ```text
 techstore/
 │
-├── main.py
-│   └── Application entry point and Gradio UI
+├── api/
+│   ├── app.py
+│   ├── database.py
+│   ├── models/
+│   ├── schemas/
+│   └── routers/
 │
-├── agent_team.py
-│   └── Triage and specialist agents
-│
-├── tools.py
-│   └── Business tools and logic
-│
-├── rag.py
-│   └── RAG ingestion and retrieval
-│
-├── schemas.py
-│   └── Tool schemas
-│
-├── ui_config.py
-│   └── UI styling/configuration
-│
-├── fake_database.json
-│   └── Mock orders, products, and tickets
+├── frontend/
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   └── ...
 │
 ├── knowledge_base/
-│   └── Store policies and FAQs
+│   ├── faq.txt
+│   ├── return_policy.txt
+│   ├── shipping_policy.txt
+│   ├── store_information.txt
+│   └── warranty.txt
 │
-├── assets/
-│   └── UI images/avatars
+├── agent_team.py
+├── tools.py
+├── rag.py
+├── schemas.py
 │
 ├── test_files/
-│   └── Project tests
 │
+├── .env
+├── .gitignore
 ├── pyproject.toml
 ├── uv.lock
-├── .gitignore
 └── README.md
 ```
 
 ---
 
-## Tech Stack
+## Technology Stack
 
-### AI & Agents
+### Frontend
+
+- React
+- JavaScript / JSX
+- CSS
+- Fetch/API communication
+
+### Backend
 
 - Python 3.12+
+- FastAPI
+- Uvicorn
+- Pydantic
+
+### Database
+
+- MongoDB Atlas
+- Beanie
+- Motor
+
+### AI
+
 - OpenAI Agents SDK
-- OpenAI model: `gpt-5.4-mini`
-- OpenAI embeddings: `text-embedding-3-small`
+- OpenAI models
 - Function tools
 - Agent handoffs
+- OpenAI embeddings
 
 ### RAG
 
 - ChromaDB
-- OpenAI Embeddings
-- Persistent local vector store
-
-### UI
-
-- Gradio
-- Custom CSS
-- Responsive chat interface
+- `text-embedding-3-small`
 
 ### Voice
 
 - faster-whisper
-- Local CPU transcription
 
 ### External Services
 
@@ -295,14 +457,11 @@ techstore/
 ### Development
 
 - `uv`
-- Python
-- JSON
-- Logging
-- Test scripts
+- Git / GitHub
 
 ---
 
-## Installation
+## Setup
 
 ### 1. Clone the repository
 
@@ -311,7 +470,7 @@ git clone https://github.com/omarinho348/techstore.git
 cd techstore
 ```
 
-### 2. Install dependencies
+### 2. Install backend dependencies
 
 Using `uv`:
 
@@ -319,7 +478,7 @@ Using `uv`:
 uv sync
 ```
 
-Or with a standard virtual environment:
+Or create a virtual environment manually:
 
 ```bash
 python -m venv .venv
@@ -339,130 +498,115 @@ Activate it:
 source .venv/bin/activate
 ```
 
-Then:
+### 3. Install frontend dependencies
 
 ```bash
-pip install -e .
+cd frontend
+npm install
+cd ..
 ```
 
 ---
 
 ## Environment Variables
 
-Create a `.env` file in the project root:
+Create a `.env` file for the backend:
 
 ```env
 OPENAI_API_KEY=your_openai_api_key
+MONGODB_URI=your_mongodb_connection_string
+DATABASE_NAME=your_database_name
+
 RESEND_API_KEY=your_resend_api_key
 SUPPORT_TEAM_EMAIL=your_support_email
 ```
 
-`OPENAI_API_KEY` is required.
+The exact environment variable names should match the project's configuration.
 
-The Resend variables are required for email escalation.
-
-> Never commit your `.env` file or API keys to GitHub.
+> Never commit `.env` or API keys to GitHub.
 
 ---
 
 ## Running the Application
 
-With `uv`:
+### Start the FastAPI Backend
+
+From the project root:
 
 ```bash
-uv run python main.py
+uv run uvicorn api.app:app --reload
 ```
 
-Or:
-
-```bash
-python main.py
-```
-
-Gradio will provide the local application URL, normally:
+The API will normally be available at:
 
 ```text
-http://127.0.0.1:7860
+http://127.0.0.1:8000
 ```
 
----
-
-## Testing
-
-The repository contains tests for the main components:
+Interactive API documentation:
 
 ```text
-test_files/
-├── test_business_rules.py
-├── test_conversation.py
-├── test_email.py
-├── test_knowledge_agent.py
-├── test_rag.py
-├── test_rag_integration.py
-└── test_triage.py
+http://127.0.0.1:8000/docs
 ```
 
-Examples:
+### Start the React Frontend
+
+In another terminal:
 
 ```bash
-uv run python test_files/test_business_rules.py
+cd frontend
+npm run dev
 ```
 
-```bash
-uv run python test_files/test_rag.py
-```
+The frontend will display its local development URL in the terminal.
 
-```bash
-uv run python test_files/test_triage.py
-```
-
-Some tests require valid API credentials.
+Both applications must be running for the complete system to work.
 
 ---
 
 ## Example Requests
 
-### Order Status
+### Check Order Status
 
 ```text
-Where is order 1002?
+Where is my order?
 ```
 
+The request flows through:
+
 ```text
+React
+  ↓
+FastAPI
+  ↓
 Triage Agent
-    ↓
+  ↓
 Order & Product Agent
-    ↓
+  ↓
 check_order_status()
-    ↓
+  ↓
+MongoDB
+  ↓
 Response
 ```
 
 ### Product Search
 
 ```text
-Do you have any phones?
+Do you have any laptops available?
 ```
 
-The Order & Product Agent calls:
-
 ```text
+React
+  ↓
+FastAPI
+  ↓
+Order & Product Agent
+  ↓
 search_products()
+  ↓
+MongoDB
 ```
-
-### Cancellation
-
-```text
-Please cancel order 1001.
-```
-
-The agent calls:
-
-```text
-cancel_order()
-```
-
-The tool determines whether the order is eligible for cancellation.
 
 ### Knowledge Question
 
@@ -471,170 +615,137 @@ What is your warranty policy?
 ```
 
 ```text
-Triage Agent
-    ↓
+React
+  ↓
+FastAPI
+  ↓
 Knowledge Agent
-    ↓
-search_knowledge_base()
-    ↓
+  ↓
+RAG
+  ↓
 ChromaDB
-    ↓
-Relevant policy
+  ↓
+Response
 ```
 
-### Human Escalation
+### Multi-Intent Request
 
 ```text
-I need a human to help me. My email is customer@example.com.
+What is your return policy, and can I cancel my order?
 ```
 
-The Support Agent uses:
-
-```text
-send_support_email()
-```
-
-to contact the support team through Resend.
+The Triage Agent can route the different parts of the request to the appropriate tools/agents and combine the results.
 
 ---
 
-## Multi-Intent Example
+## Authentication & Conversations
 
-The system can handle multiple requests in one message:
+The FastAPI backend manages authenticated customers and their conversations.
 
-```text
-What is your warranty policy, and is order 1003 eligible
-for a refund?
-```
-
-The Triage Agent can route the two tasks separately:
+A typical chat flow is:
 
 ```text
-Warranty question
-      ↓
-Knowledge Agent
-
-Refund question
-      ↓
-Order & Product Agent
+Login
+  ↓
+Authenticated Customer
+  ↓
+Create/Select Conversation
+  ↓
+POST /stream
+  ↓
+Verify Conversation Ownership
+  ↓
+Agent Workflow
+  ↓
+Stream Response
+  ↓
+Store Conversation Messages
 ```
 
-The final response combines the results for the customer.
+Conversation ownership is checked by the backend so customers cannot access another customer's conversation.
 
 ---
 
-## Data
+## Testing
 
-The project currently uses:
+The repository contains tests for different parts of the system, including:
 
-```text
-fake_database.json
-```
+- Business rules
+- Agent behavior
+- RAG
+- Conversations
+- Email escalation
+- API/backend functionality
 
-as a mock database containing:
-
-- Orders
-- Products
-- Support tickets
-
-This is intended for development and demonstration.
-
-Order changes are currently held in memory and are not persisted back to the JSON file.
-
----
-
-## Adding Knowledge
-
-To add another policy or FAQ:
-
-1. Create a `.txt` file inside `knowledge_base/`
-2. Add the relevant information
-3. Delete `chroma_store/`
-4. Restart the application
-
-Example:
-
-```text
-knowledge_base/
-├── faq.txt
-├── return_policy.txt
-├── shipping_policy.txt
-├── store_information.txt
-├── warranty.txt
-└── payment_policy.txt
-```
-
-The RAG ingestion process automatically discovers `.txt` files in the directory.
+Backend tests can be run from the project environment using the project's configured test scripts/framework.
 
 ---
 
 ## Key Design Principles
 
-### Specialized Agents
+### 1. Specialized Agents
 
-Each agent has a focused responsibility instead of putting every task into one large prompt.
+Different responsibilities are separated into focused agents.
 
-### Tool-Based Actions
+### 2. Tool-Based Actions
 
-Business operations are performed through Python tools rather than allowing the model to invent results.
+The model uses tools for real business operations instead of inventing database results.
 
-### Business Rules Outside the LLM
+### 3. Business Logic Outside the LLM
 
-Important constraints such as order cancellation eligibility are enforced by the application.
+Critical rules are enforced by backend code.
 
-### RAG Grounding
+### 4. Persistent Database
 
-Company-specific information comes from the TechStore knowledge base.
+MongoDB provides persistent storage for customers, products, orders, tickets, and conversations.
 
-### Separation of Concerns
+### 5. RAG Grounding
 
-```text
-UI
- ↓
-Agents
- ↓
-Tools
- ↓
-Data / RAG / External Services
-```
+Company-specific information is retrieved from the TechStore knowledge base.
 
-This makes the project easier to test, maintain, and extend.
+### 6. API Separation
+
+The React frontend communicates with FastAPI through APIs instead of directly accessing the database or AI layer.
+
+### 7. Streaming
+
+The backend can stream AI responses to the React frontend for a more responsive chat experience.
 
 ---
 
 ## Future Improvements
 
-Possible next steps include:
-
-- Replace the JSON mock database with PostgreSQL
-- Add authentication and authorization
-- Persist order changes
-- Add customer accounts
-- Improve RAG chunking and retrieval
-- Add hybrid search and reranking
+- Improve authentication and authorization
+- Add production-grade database indexing
+- Add more advanced RAG retrieval/reranking
 - Add agent tracing and observability
-- Add automated evaluation for agent responses
-- Improve voice transcription performance
-- Deploy the application to a production environment
+- Add automated agent evaluation
+- Add stronger frontend error handling
+- Add deployment configuration
+- Add CI/CD
+- Add production monitoring
 
 ---
 
 ## Project Status
 
-The current implementation includes:
+Current architecture includes:
 
-- [x] Multi-agent architecture
-- [x] Triage and specialist agents
+- [x] React frontend
+- [x] FastAPI backend
+- [x] MongoDB database
+- [x] Beanie/Motor database integration
+- [x] Customer authentication
+- [x] Conversation management
+- [x] Streaming chat endpoint
+- [x] Multi-agent AI architecture
 - [x] Agent handoffs
 - [x] Business tools
-- [x] Order/product operations
-- [x] Support tickets
-- [x] Email escalation
 - [x] RAG knowledge base
 - [x] ChromaDB
 - [x] Voice transcription
-- [x] Gradio interface
-- [x] Testing scripts
+- [x] Resend support escalation
+- [x] Backend/API separation
 
 ---
 
