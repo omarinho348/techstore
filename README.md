@@ -26,9 +26,9 @@ The system combines specialized AI agents, tool calling, RAG, MongoDB data, and 
 - 💬 Streaming chat responses
 - 🔐 Customer authentication and owned-conversation access
 
-<img width="1353" height="634" alt="image" src="https://github.com/user-attachments/assets/aea45222-4508-404b-9d3f-a24d440a4d55" />
+<img width="1364" height="632" alt="image" src="https://github.com/user-attachments/assets/33833ef4-2dd3-43d1-bfd4-c5bb034d7a2a" />
 
-<img width="1350" height="641" alt="image" src="https://github.com/user-attachments/assets/66465262-334b-4eb5-acb1-6a3dc8852b59" />
+<img width="1348" height="635" alt="image" src="https://github.com/user-attachments/assets/c9e41891-7045-4924-9759-21a195aeb0f0" />
 
 <img width="1361" height="632" alt="image" src="https://github.com/user-attachments/assets/f61b6237-5c62-4243-a64e-53736d5a9aa3" />
 
