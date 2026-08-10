@@ -118,136 +118,63 @@ export default function Chat() {
     }
 
     async function handleSend(message) {
+        stopTypingTimer();
+        typingQueue.current = "";
 
-    stopTypingTimer();
-    typingQueue.current = "";
+        let sessionId = currentSessionId;
+        if (!sessionId) {
+            skipNextEmptyHistoryLoad.current = true;
+            sessionId = await newConversation();
+        }
+        if (!sessionId) return;
 
-    let sessionId = currentSessionId;
+        setMessages((previous) => [
+            ...previous,
+            { role: "user", message },
+            { role: "assistant", message: "", status: "Thinking...", agent: "" },
+        ]);
+        await loadConversations();
 
-    if (!sessionId) {
-        skipNextEmptyHistoryLoad.current = true;
-        sessionId = await newConversation();
-    }
-
-    if (!sessionId) {
-        return;
-    }
-
-    // ==========================================================
-    // Add user message
-    // ==========================================================
-
-    setMessages((previous) => [
-
-        ...previous,
-
-        {
-            role: "user",
-            message,
-        },
-
-        {
-            role: "assistant",
-            message: "",
-            status: "Thinking...",
-            agent: "",
-        },
-
-    ]);
-
-    await loadConversations();
-
-    await chatService.sendMessage(
-
-        sessionId,
-
-        message,
-
-        {
-
-            // --------------------------------------------------
-
-            agent: ({ name }) => {
-
-                setMessages((previous) => {
-
-                    const updated = [...previous];
-
-                    updated[updated.length - 1] = {
-
-                        ...updated[updated.length - 1],
-
-                        agent: name,
-
-                    };
-
-                    return updated;
-
-                });
-
-            },
-
-            // --------------------------------------------------
-
-            status: ({ text }) => {
-
-                setMessages((previous) => {
-
-                    const updated = [...previous];
-
-                    updated[updated.length - 1] = {
-
-                        ...updated[updated.length - 1],
-
-                        status: text,
-
-                    };
-
-                    return updated;
-
-                });
-
-            },
-
-            // --------------------------------------------------
-
-            token: ({ text }) => {
-                typingQueue.current += text;
-                startTypingTimer();
-
-            },
-
-            // --------------------------------------------------
-
-            done: () => {
-
-                if (!typingQueue.current) {
+        try {
+            await chatService.sendMessage(sessionId, message, {
+                agent: ({ name }) => {
+                    setMessages((previous) => replaceLastMessage(previous, { agent: name }));
+                },
+                status: ({ text }) => {
+                    setMessages((previous) => replaceLastMessage(previous, { status: text }));
+                },
+                token: ({ text }) => {
+                    typingQueue.current += text;
+                    startTypingTimer();
+                },
+                final: ({ response }) => {
                     stopTypingTimer();
-                }
-
-                setMessages((previous) => {
-
-                    const updated = [...previous];
-
-                    updated[updated.length - 1] = {
-
-                        ...updated[updated.length - 1],
-
+                    typingQueue.current = "";
+                    setMessages((previous) => replaceLastMessage(previous, {
+                        message: response,
                         status: "",
+                    }));
+                },
+                done: () => {
+                    setMessages((previous) => replaceLastMessage(previous, { status: "" }));
+                },
+            });
+        } catch (error) {
+            stopTypingTimer();
+            typingQueue.current = "";
+            setMessages((previous) => replaceLastMessage(previous, {
+                message: error.message || "[Message processing failed]",
+                status: "",
+            }));
+        }
+    }
 
-                    };
-
-                    return updated;
-
-                });
-
-            },
-
-        },
-
-    );
-
-}
+    function replaceLastMessage(messages, changes) {
+        const updated = [...messages];
+        const lastIndex = updated.length - 1;
+        updated[lastIndex] = { ...updated[lastIndex], ...changes };
+        return updated;
+    }
 
 // attach uploadImage method to handleSend so child can call it
 handleSend.uploadImage = async function (file) {

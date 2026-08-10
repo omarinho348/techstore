@@ -7,6 +7,7 @@ import os
 import json
 
 from agents import Runner
+from openai.types.responses import ResponseTextDeltaEvent
 from fastapi import UploadFile, File, Form
 
 from PIL import Image
@@ -207,146 +208,90 @@ async def chat(
             detail="Chat processing failed.",
         ) from error
 
-
-@router.post(
-    "/stream",
-)
+@router.post("/stream")
 async def stream_chat(
     request: ChatRequest,
     current_customer: Customer = Depends(get_current_customer),
 ):
+    """Stream an agent run through SSE using the Agents SDK event stream."""
+
     async def event_generator():
-        conversation = await get_owned_conversation(
-            request.session_id,
-            current_customer,
-        )
+        try:
+            conversation = await get_owned_conversation(request.session_id, current_customer)
+            if conversation is None:
+                raise HTTPException(status_code=404, detail="Conversation not found.")
 
-        if conversation is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Conversation not found.",
+            previous_messages = await load_history(request.session_id)
+            await update_conversation(conversation, request.message, previous_messages)
+            input_items = build_input_items(
+                previous_messages,
+                build_customer_context(current_customer),
+                request.message,
             )
+            await MessageLog(
+                session_id=request.session_id,
+                role=MessageRole.USER,
+                message=request.message,
+            ).insert()
 
-        previous_messages = await load_history(request.session_id)
+            result = Runner.run_streamed(triage_agent, input=input_items)
+            streamed_text = ""
 
-        await update_conversation(
-            conversation,
-            request.message,
-            previous_messages,
-        )
-
-        customer_context = build_customer_context(current_customer)
-
-        input_items = build_input_items(
-            previous_messages,
-            customer_context,
-            request.message,
-        )
-
-        await MessageLog(
-            session_id=request.session_id,
-            role=MessageRole.USER,
-            message=request.message,
-        ).insert()
-
-        result = Runner.run_streamed(
-            triage_agent,
-            input=input_items,
-        )
-
-        assistant_response = ""
-
-        async for event in result.stream_events():
-            event_name = type(event).__name__
-
-            if event_name == "AgentUpdatedStreamEvent":
-                yield (
-                    "event: agent\n"
-                    f"data: {json.dumps({'name': event.new_agent.name})}\n\n"
-                )
-
-            elif event_name == "RunItemStreamEvent":
-                item = event.item
-
-                if hasattr(item, "raw_item"):
-                    raw_item = item.raw_item
-
-                    if hasattr(raw_item, "name"):
-                        tool = raw_item.name
-
-                        friendly = {
-                            "transfer_to_order_and_product_agent":
-                                "Routing to Order & Product Agent...",
-                            "transfer_to_knowledge_agent":
-                                "Routing to Knowledge Agent...",
-                            "transfer_to_support_agent":
-                                "Routing to Support Agent...",
-                            "check_order_status":
-                                "Checking your order...",
-                            "get_my_orders":
-                                "Retrieving your orders...",
-                            "search_products":
-                                "Searching products...",
-                            "cancel_order":
-                                "Cancelling your order...",
-                            "check_refund_eligibility":
-                                "Checking refund eligibility...",
-                            "ticket_inquiry":
-                                "Looking up your support ticket...",
-                            "send_support_email":
-                                "Sending support email...",
-                            "search_knowledge_base":
-                                "Searching our knowledge base...",
-                        }.get(tool)
-
-                        if friendly:
-                            yield (
-                                "event: status\n"
-                                f"data: {json.dumps({'text': friendly})}\n\n"
-                            )
-
-            elif event_name == "RawResponsesStreamEvent":
-                raw = event.data
-                raw_name = type(raw).__name__
-
-                if raw_name == "ResponseTextDeltaEvent":
-                    assistant_response += raw.delta
-
+            async for event in result.stream_events():
+                if event.type == "agent_updated_stream_event":
+                    yield (
+                        "event: agent\n"
+                        f"data: {json.dumps({'name': event.new_agent.name})}\n\n"
+                    )
+                elif event.type == "run_item_stream_event" and event.name in {
+                    "tool_called",
+                    "handoff_requested",
+                }:
+                    tool_name = getattr(event.item.raw_item, "name", None)
+                    if tool_name:
+                        status = tool_name.replace("_", " ").title()
+                        yield (
+                            "event: status\n"
+                            f"data: {json.dumps({'text': f'{status}...'})}\n\n"
+                        )
+                elif event.type == "raw_response_event" and isinstance(
+                    event.data,
+                    ResponseTextDeltaEvent,
+                ):
+                    streamed_text += event.data.delta
                     yield (
                         "event: token\n"
-                        f"data: {json.dumps({'text': raw.delta})}\n\n"
+                        f"data: {json.dumps({'text': event.data.delta})}\n\n"
                     )
 
-        while not result.is_complete:
-            await result.run_loop_task
+            if result.run_loop_exception:
+                raise result.run_loop_exception
 
-        if not assistant_response:
-            if result.final_output is not None:
-                assistant_response = str(result.final_output)
+            assistant_response = streamed_text or str(result.final_output or "")
+            if not assistant_response.strip():
+                assistant_response = "[No response generated by the assistant]"
 
-        # Ensure we never insert an empty message (pydantic enforces min_length=1)
-        if not assistant_response or assistant_response.strip() == "":
-            assistant_response = "[No response generated by the assistant]"
+            await MessageLog(
+                session_id=request.session_id,
+                role=MessageRole.ASSISTANT,
+                message=assistant_response,
+            ).insert()
 
-        await MessageLog(
-            session_id=request.session_id,
-            role=MessageRole.ASSISTANT,
-            message=assistant_response,
-        ).insert()
-
-        yield (
-            "event: final\n"
-            f"data: {json.dumps({'response': assistant_response})}\n\n"
-        )
-
-        yield (
-            "event: done\n"
-            "data: {}\n\n"
-        )
+            yield (
+                "event: final\n"
+                f"data: {json.dumps({'response': assistant_response})}\n\n"
+            )
+            yield "event: done\ndata: {}\n\n"
+        except Exception as error:
+            yield (
+                "event: error\n"
+                f"data: {json.dumps({'message': str(error)})}\n\n"
+            )
 
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
