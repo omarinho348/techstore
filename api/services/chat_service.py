@@ -73,7 +73,7 @@ Customer ID: {current_customer.id}
 
 IMPORTANT
 
-If you call get_my_orders,
+If you call get_my_orders or recommend_products,
 ALWAYS use this email:
 
 {current_customer.email}

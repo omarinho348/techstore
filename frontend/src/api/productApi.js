@@ -9,3 +9,8 @@ export async function getProduct(productId) {
 	const response = await api.get(`/products/${productId}`);
 	return response.data;
 }
+
+export async function getRecommendedProducts() {
+    const response = await api.get("/products/recommendations");
+    return response.data;
+}

@@ -34,6 +34,7 @@ from tools import (
     ticket_inquiry,
     get_my_orders,
     create_order_via_chat,
+    recommend_products,
 )
 
 load_dotenv()
@@ -72,6 +73,7 @@ send_support_email_tool = function_tool(send_support_email)
 search_knowledge_base_tool = function_tool(search_knowledge_base)
 get_my_orders_tool = function_tool(get_my_orders)
 create_order_tool = function_tool(create_order_via_chat)
+recommend_products_tool = function_tool(recommend_products)
 
 knowledge_agent = Agent(
     name="Knowledge Agent",
@@ -152,7 +154,7 @@ WORKFLOW
 5. Complete your own task only.
 6. Return only completed information.
 
-You are TechStore's Order & Product Agent. You handle questions about specific orders and product availability using your four tools: check_order_status, search_products, cancel_order, and check_refund_eligibility.
+You are TechStore's Order & Product Agent. You handle questions about orders, product availability, and personalized product recommendations.
 
 Rules:
 1. ALWAYS use a tool for factual lookups -- never guess or invent an order status, product price, stock level, or refund eligibility.
@@ -168,8 +170,10 @@ If the customer asks about:
 - my latest order
 - orders I placed
 - what have I bought
-
 call get_my_orders.
+
+If the customer asks for product recommendations, products they may like,
+or suggestions based on previous orders or purchases, call recommend_products.
 
 The customer's authenticated email is already available in the system prompt. Do not ask for their email.
 
@@ -206,6 +210,7 @@ The workflow manager will combine your answer with other specialists.
     ),
     tools=[
         check_order_status_tool,
+        recommend_products_tool,
         search_products_tool,
         cancel_order_tool,
         check_refund_eligibility_tool,

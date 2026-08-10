@@ -618,7 +618,56 @@ async def get_my_orders(customer_email: str):
 
 
 # =====================================================================
-# TOOL 9: CREATE ORDER VIA CHAT
+# TOOL 9: RECOMMEND PRODUCTS
+# =====================================================================
+
+async def recommend_products(
+    customer_email: str,
+    limit: int = 4,
+) -> dict[str, Any]:
+    """Recommend in-stock products based on a customer's past purchases."""
+
+    try:
+        limit = max(1, min(int(limit), 12))
+    except (TypeError, ValueError):
+        limit = 4
+
+    customer = await Customer.find_one(Customer.email == customer_email)
+    if customer is None:
+        return {"found": False, "recommendations": [], "error": "Authenticated customer not found."}
+
+    orders = await Order.find(Order.customer_id == str(customer.id)).to_list()
+    completed_orders = [order for order in orders if order.status != OrderStatus.CANCELLED]
+    if not completed_orders:
+        return {"found": True, "recommendations": [], "message": "No previous purchases are available yet."}
+
+    products = await Product.find_all().to_list()
+    products_by_id = {str(product.id): product for product in products}
+    purchased_product_ids: set[str] = set()
+    category_scores: dict[str, int] = {}
+    for order in completed_orders:
+        for item in order.items:
+            purchased_product_ids.add(item.product_id)
+            product = products_by_id.get(item.product_id)
+            if product and product.category:
+                category_scores[product.category] = category_scores.get(product.category, 0) + item.quantity
+
+    candidates = [product for product in products if product.stock > 0 and str(product.id) not in purchased_product_ids]
+    ranked_products = sorted(candidates, key=lambda product: (-category_scores.get(product.category, 0), product.name.lower()))[:limit]
+    recommendations = [
+        {
+            "id": str(product.id), "name": product.name,
+            "description": product.description, "price": product.price,
+            "category": product.category, "stock": product.stock,
+            "reason": (f"You have previously purchased {product.category} products." if category_scores.get(product.category, 0) else "A currently available product you may like."),
+        }
+        for product in ranked_products
+    ]
+    logger.info("recommend_products: returned %d recommendation(s) for %s", len(recommendations), customer_email)
+    return {"found": True, "recommendations": recommendations}
+
+# =====================================================================
+# TOOL 10: CREATE ORDER VIA CHAT
 # =====================================================================
 
 async def create_order_via_chat(

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from api.auth import get_current_customer
+from api.models.customer import Customer
 
 from api.models.product import Product
 from api.schemas.product import (
@@ -6,6 +8,7 @@ from api.schemas.product import (
     ProductResponse,
     ProductUpdate,
 )
+from tools import recommend_products
 
 
 router = APIRouter(
@@ -69,6 +72,15 @@ async def list_products():
         product_to_response(product)
         for product in products
     ]
+
+
+@router.get("/recommendations")
+async def get_recommendations(
+    customer: Customer = Depends(get_current_customer),
+):
+    """Return personalized, in-stock product recommendations."""
+
+    return await recommend_products(customer.email)
 
 
 @router.get(

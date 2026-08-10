@@ -6,7 +6,7 @@ export default function MainLayout({ children }) {
 
             <Sidebar />
 
-            <main className="flex-1 overflow-hidden text-gray-100">
+            <main className="flex-1 min-w-0 overflow-x-hidden overflow-y-auto text-gray-100">
                 {children}
             </main>
 

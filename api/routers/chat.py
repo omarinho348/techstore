@@ -57,7 +57,7 @@ Customer ID: {customer.id}
 
 IMPORTANT:
 
-If you call get_my_orders,
+If you call get_my_orders or recommend_products,
 always use:
 
 {customer.email}
