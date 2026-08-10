@@ -2,85 +2,47 @@ from pathlib import Path
 import shutil
 import uuid
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    File,
-    Form,
-    UploadFile,
-)
-
-from api.services.voice_service import (
-    transcribe_audio,
-    text_to_speech,
-)
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from api.auth import get_current_customer
 from api.models.customer import Customer
-
-from api.services.chat_service import process_chat
 from api.services.voice_service import transcribe_audio
 
-router = APIRouter(
-    prefix="/voice",
-    tags=["Voice"],
-)
+router = APIRouter(prefix="/voice", tags=["Voice"])
 
 UPLOAD_FOLDER = Path("uploads")
 UPLOAD_FOLDER.mkdir(exist_ok=True)
 
-@router.post("")
-async def voice_chat(
 
+@router.post("/transcribe")
+async def transcribe_voice(
     audio: UploadFile = File(...),
-
     session_id: str = Form(...),
-
-    current_customer: Customer = Depends(
-        get_current_customer,
-    ),
-
+    current_customer: Customer = Depends(get_current_customer),
 ):
+    """Persist a recording privately and return its Faster-Whisper transcript."""
 
-    filename = (
-        f"{uuid.uuid4()}.webm"
-    )
+    suffix = Path(audio.filename or "recording.webm").suffix or ".webm"
+    filename = f"{session_id}-{uuid.uuid4()}{suffix}"
+    file_path = UPLOAD_FOLDER / filename
 
-    filepath = UPLOAD_FOLDER / filename
+    with file_path.open("wb") as buffer:
+        shutil.copyfileobj(audio.file, buffer)
 
-    with open(filepath, "wb") as buffer:
+    try:
+        transcript = await transcribe_audio(str(file_path))
+    except Exception as error:
+        file_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Voice transcription failed.",
+        ) from error
 
-        shutil.copyfileobj(
-            audio.file,
-            buffer,
+    if not transcript:
+        file_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=422,
+            detail="No speech was detected in the recording.",
         )
 
-    transcript = await transcribe_audio(
-        str(filepath),
-    )
-
-    response = await process_chat(
-
-        session_id=session_id,
-
-        message=transcript,
-
-        current_customer=current_customer,
-
-    )
-
-    filepath.unlink()
-
-    audio_file = await text_to_speech(
-    response.response,
-    )
-
-    return {
-
-    "transcript": transcript,
-
-    "response": response.response,
-
-    "audio_url": f"/audio/{audio_file}",
-
-    }
+    return {"transcript": transcript, "audio_file": filename}

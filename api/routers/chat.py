@@ -5,6 +5,7 @@ api/routers/chat.py
 from datetime import datetime, timezone
 import os
 import json
+import logging
 
 from agents import Runner
 from openai.types.responses import ResponseTextDeltaEvent
@@ -23,6 +24,7 @@ from api.models.customer import Customer
 from api.models.message_log import MessageLog, MessageRole
 from api.schemas.chat import ChatRequest, ChatResponse
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/chat",
@@ -168,6 +170,8 @@ async def chat(
             session_id=request.session_id,
             role=MessageRole.USER,
             message=request.message,
+            input_type=request.input_type,
+            audio_file=request.audio_file,
         ).insert()
 
         result = await Runner.run(
@@ -232,6 +236,8 @@ async def stream_chat(
                 session_id=request.session_id,
                 role=MessageRole.USER,
                 message=request.message,
+                input_type=request.input_type,
+                audio_file=request.audio_file,
             ).insert()
 
             result = Runner.run_streamed(triage_agent, input=input_items)
@@ -293,8 +299,6 @@ async def stream_chat(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
-
-
 
 @router.post(
     "/upload",

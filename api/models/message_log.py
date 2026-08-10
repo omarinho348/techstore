@@ -21,6 +21,10 @@ class MessageLog(Document):
 
     role: MessageRole
 
+    input_type: str = Field(default="text", max_length=20)
+
+    audio_file: str | None = Field(default=None, max_length=500)
+
     message: str = Field(
         ...,
         min_length=1,

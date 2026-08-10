@@ -4,22 +4,16 @@ export async function sendMessage(
     sessionId,
     message,
     handlers,
+    metadata = {},
 ) {
-
     return await chatApi.sendMessage(
-
         {
-
             session_id: sessionId,
-
             message,
-
+            ...metadata,
         },
-
         handlers,
-
     );
-
 }
 
 export async function loadConversation(

@@ -1,11 +1,5 @@
 import * as voiceApi from "../api/voiceApi";
 
-export async function sendVoice(
-    audioBlob,
-    sessionId,
-) {
-    return await voiceApi.sendVoice(
-        audioBlob,
-        sessionId,
-    );
+export async function transcribeVoice(audioBlob, sessionId) {
+    return voiceApi.transcribeVoice(audioBlob, sessionId);
 }

@@ -7,6 +7,7 @@ import ChatWindow from "../components/ChatWindow";
 import ChatInput from "../components/ChatInput";
 
 import * as chatService from "../services/chatService";
+import * as voiceService from "../services/voiceService";
 
 import { useAuth } from "../contexts/AuthContext";
 import { useConversations } from "../contexts/ConversationContext";
@@ -31,11 +32,8 @@ export default function Chat() {
         async function loadHistory() {
 
             if (!currentSessionId) {
-
                 setMessages([]);
-
                 return;
-
             }
 
             try {
@@ -117,11 +115,18 @@ export default function Chat() {
         }, 16);
     }
 
-    async function handleSend(message) {
+    function replaceLastMessage(previousMessages, changes) {
+        const updated = [...previousMessages];
+        const lastIndex = updated.length - 1;
+        updated[lastIndex] = { ...updated[lastIndex], ...changes };
+        return updated;
+    }
+
+    async function handleSend(message, metadata = {}, sessionIdOverride = null) {
         stopTypingTimer();
         typingQueue.current = "";
 
-        let sessionId = currentSessionId;
+        let sessionId = sessionIdOverride || currentSessionId;
         if (!sessionId) {
             skipNextEmptyHistoryLoad.current = true;
             sessionId = await newConversation();
@@ -158,7 +163,7 @@ export default function Chat() {
                 done: () => {
                     setMessages((previous) => replaceLastMessage(previous, { status: "" }));
                 },
-            });
+            }, metadata);
         } catch (error) {
             stopTypingTimer();
             typingQueue.current = "";
@@ -169,75 +174,74 @@ export default function Chat() {
         }
     }
 
-    function replaceLastMessage(messages, changes) {
-        const updated = [...messages];
-        const lastIndex = updated.length - 1;
-        updated[lastIndex] = { ...updated[lastIndex], ...changes };
-        return updated;
+    async function handleVoice(audioBlob) {
+        let sessionId = currentSessionId;
+        if (!sessionId) {
+            skipNextEmptyHistoryLoad.current = true;
+            sessionId = await newConversation();
+        }
+        if (!sessionId) return;
+
+        const { transcript, audio_file: audioFile } =
+            await voiceService.transcribeVoice(audioBlob, sessionId);
+
+        if (!transcript || !transcript.trim()) {
+            throw new Error("No speech was detected. Please try again.");
+        }
+
+        await handleSend(
+            transcript,
+            { input_type: "audio", audio_file: audioFile },
+            sessionId,
+        );
     }
 
-// attach uploadImage method to handleSend so child can call it
-handleSend.uploadImage = async function (file) {
-    stopTypingTimer();
-    typingQueue.current = "";
+    // attach uploadImage method to handleSend so child can call it
+    handleSend.uploadImage = async function (file) {
+        stopTypingTimer();
+        typingQueue.current = "";
 
-    let sessionId = currentSessionId;
+        let sessionId = currentSessionId;
 
-    if (!sessionId) {
-        skipNextEmptyHistoryLoad.current = true;
-        sessionId = await newConversation();
-    }
+        if (!sessionId) {
+            skipNextEmptyHistoryLoad.current = true;
+            sessionId = await newConversation();
+        }
 
-    if (!sessionId) return;
+        if (!sessionId) return;
 
-    setMessages((previous) => [
-        ...previous,
-        {
-            role: "user",
-            message: `[Image uploaded: ${file.name}]`,
-        },
-        {
-            role: "assistant",
-            message: "",
-            status: "Processing image...",
-            agent: "",
-        },
-    ]);
+        setMessages((previous) => [
+            ...previous,
+            {
+                role: "user",
+                message: `[Image uploaded: ${file.name}]`,
+            },
+            {
+                role: "assistant",
+                message: "",
+                status: "Processing image...",
+                agent: "",
+            },
+        ]);
 
-    await loadConversations();
+        await loadConversations();
 
-    try {
-        const result = await chatService.uploadImage(sessionId, file);
+        try {
+            const result = await chatService.uploadImage(sessionId, file);
+            const assistantText = result.response ?? "[No response]";
 
-        // show assistant response
-        const assistantText = result.response ?? "[No response]";
-
-        setMessages((previous) => {
-            const updated = [...previous];
-
-            updated[updated.length - 1] = {
-                ...updated[updated.length - 1],
+            setMessages((previous) => replaceLastMessage(previous, {
                 message: assistantText,
                 status: "",
-            };
+            }));
 
-            return updated;
-        });
-
-    } catch (err) {
-        setMessages((previous) => {
-            const updated = [...previous];
-
-            updated[updated.length - 1] = {
-                ...updated[updated.length - 1],
+        } catch (err) {
+            setMessages((previous) => replaceLastMessage(previous, {
                 message: "[Image processing failed]",
                 status: "",
-            };
-
-            return updated;
-        });
-    }
-};
+            }));
+        }
+    };
 
     return (
 
@@ -252,10 +256,8 @@ handleSend.uploadImage = async function (file) {
 
                 <ChatInput
                     onSend={handleSend}
-                    // expose uploadImage helper via onSend.uploadImage
-                    ref={null}
+                    onVoice={handleVoice}
                 />
-
 
             </div>
 

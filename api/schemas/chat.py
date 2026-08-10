@@ -14,6 +14,10 @@ class ChatRequest(BaseModel):
         max_length=200,
     )
 
+    input_type: str = Field(default="text", max_length=20)
+
+    audio_file: str | None = Field(default=None, max_length=500)
+
     message: str = Field(
         ...,
         min_length=1,
@@ -31,3 +35,23 @@ class ChatResponse(BaseModel):
     response: str
 
     created_at: datetime
+
+
+class TTSRequest(BaseModel):
+    """
+    Request body for converting a message to speech.
+    """
+
+    message: str = Field(
+        ...,
+        min_length=1,
+        max_length=10000,
+    )
+
+
+class TTSResponse(BaseModel):
+    """
+    Response returned after generating speech audio.
+    """
+
+    audio_url: str
